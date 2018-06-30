@@ -2,11 +2,13 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Geolocation exposing (..)
+import Maps
 
 
 type alias Model =
     { desiredLocation : Location
     , currentLocation : Location
+    , map : Maps.Model Msg
     }
 
 
@@ -22,6 +24,7 @@ main =
 
 type Msg
     = NoOp
+    | MapsMsg (Maps.Msg Msg)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -30,11 +33,20 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
+        MapsMsg msg ->
+            let
+                ( updatedMap, cmds ) =
+                    Maps.update msg model.map
+            in
+                ( { model | map = updatedMap }, Cmd.map MapsMsg cmds )
+
 
 view : Model -> Html Msg
 view model =
     div []
-        [ text "New Html Program" ]
+        [ text "New Html Program"
+        , Html.map MapsMsg <| Maps.view model.map
+        ]
 
 
 subscriptions : Model -> Sub Msg
@@ -50,6 +62,7 @@ init =
 defaultModel =
     { currentLocation = defaultLocation
     , desiredLocation = defaultLocation
+    , map = Maps.defaultModel
     }
 
 
