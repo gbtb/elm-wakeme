@@ -20,9 +20,10 @@ import Json.Decode as JD
 import GeolocationDecoders exposing (locationDecoder)
 import Task
 import Html.Attributes exposing (id)
+import Maps.Geo exposing (LatLng, latLng)
 
 type alias Model =
-    { desiredLocation : Location
+    { desiredLocation : LatLng
     , currentLocation : Location
     , map : Maps.Model Data
     , clientPos : ( Float, Float )
@@ -87,19 +88,18 @@ update msgArg model =
                         updatedMap =
                             model.map
                                 |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
-                                |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") pos ])
+                                |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom positionMarker pos ])
 
-                        mapElemPos = getElement "mapWindow"
                     in
                         if newLocation |> isDifferentFrom 0.01 model.currentLocation then
                             ( { model
                                 | currentLocation = newLocation
                                 , map = updatedMap
                             }
-                            , Task.attempt UpdateMapWindowPosition mapElemPos
+                            , Cmd.none
                             )
                         else
-                            ( model, Task.attempt UpdateMapWindowPosition mapElemPos )
+                            ( model, Cmd.none )
                 
                 Err e -> Debug.log (JD.errorToString e) ( model, Cmd.none )
 
@@ -117,7 +117,8 @@ update msgArg model =
                 ( { model
                     | clientPos = event.screenPos,
                     offsetPos = (x,y)
-                    , map = model.map |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") markerPos ])
+                    , map = model.map |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom targetMarker markerPos ])
+                    , desiredLocation = markerPos
                   }
                 , Cmd.none
                 )
@@ -139,6 +140,10 @@ view model = {
     }
     
 
+positionMarker = Html.text "➘"
+
+targetMarker = Html.text "\u{29BF}"
+
 
 onClick =
     { stopPropagation = False, preventDefault = False }
@@ -155,12 +160,12 @@ subscriptions model =
 
 
 init _ =
-    ( defaultModel, Cmd.none )
+    ( defaultModel, Task.attempt UpdateMapWindowPosition <| getElement "mapWindow" )
 
 
 defaultModel =
     { currentLocation = defaultLocation
-    , desiredLocation = defaultLocation
+    , desiredLocation = latLng 0 0
     , map = Maps.defaultModel
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
