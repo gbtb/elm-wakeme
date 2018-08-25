@@ -2,6 +2,7 @@ port module Geolocation exposing (..)
 
 import Time exposing (Posix)
 import Json.Encode exposing (Value)
+import Json.Decode as JD
 
 
 {-| All available details of the device's current location in the world.
@@ -41,7 +42,14 @@ north, 90° is east, 180° is south, 270° is west, etc.
 -}
 type Movement
     = Static
-    | Moving { speed : Float, degreesFromNorth : Float }
+    | Moving MovingData
 
+
+type alias MovingData = { speed : Float, degreesFromNorth : Float }
 
 port changes : (Value -> msg) -> Sub msg
+
+
+posixDecoder : JD.Decoder Posix
+posixDecoder =
+    JD.map Time.millisToPosix JD.int

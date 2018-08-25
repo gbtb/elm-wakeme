@@ -14,6 +14,9 @@ import Element
 import Json.Decode
 import List.Extra as Lis
 import Html.Events.Extra.Mouse as Mouse
+import Time
+import Json.Decode as JD
+import GeolocationDecoders exposing (locationDecoder)
 
 
 type alias Model =
@@ -26,9 +29,9 @@ type alias Model =
     }
 
 
-main : Program Never Model Msg
+main : Program () Model Msg
 main =
-    Browser.application
+    Browser.document
         { init = init
         , view = view
         , update = update
@@ -43,7 +46,7 @@ type alias Data =
 type Msg
     = NoOp
     | MapsMsg (Maps.Msg Data)
-    | LocationUpdated Location
+    | LocationUpdated (Result JD.Error Location)
     | ClickOnMap Mouse.Event
     | TopClick Mouse.Event
 
@@ -61,25 +64,29 @@ update msgArg model =
             in
                 ( { model | map = updatedMap }, Cmd.map MapsMsg cmds )
 
-        LocationUpdated newLocation ->
-            let
-                pos =
-                    Maps.Geo.latLng newLocation.latitude newLocation.longitude
+        LocationUpdated locationRes ->
+            case locationRes of
+                Ok newLocation ->
+                    let
+                        pos =
+                            Maps.Geo.latLng newLocation.latitude newLocation.longitude
 
-                updatedMap =
-                    model.map
-                        |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
-                        |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") pos ])
-            in
-                if newLocation |> isDifferentFrom 0.01 model.currentLocation then
-                    ( { model
-                        | currentLocation = newLocation
-                        , map = updatedMap
-                      }
-                    , Cmd.none
-                    )
-                else
-                    ( model, Cmd.none )
+                        updatedMap =
+                            model.map
+                                |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
+                                |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") pos ])
+                    in
+                        if newLocation |> isDifferentFrom 0.01 model.currentLocation then
+                            ( { model
+                                | currentLocation = newLocation
+                                , map = updatedMap
+                            }
+                            , Cmd.none
+                            )
+                        else
+                            ( model, Cmd.none )
+                
+                Err e -> Debug.log (JD.errorToString e) ( model, Cmd.none )
 
         ClickOnMap event ->
             let
@@ -103,15 +110,18 @@ update msgArg model =
             ( { model | topPos = Tuple.second ev.clientPos }, Cmd.none )
 
 
-view : Model -> Html Msg
-view model =
-    Element.layout [] <|
+view : Model -> {title: String, body: List (Html Msg)}
+view model = {
+    title = "Wakeme",
+    body = [Element.layout [] <|
         Element.column [ Element.htmlAttribute <| onClick TopClick ]
             [ Element.text "New Html Program"
             , Element.text <| viewTup model.clientPos
             , Element.text <| viewTup model.offsetPos
             , Element.el [ Element.htmlAttribute <| onClick ClickOnMap ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
-            ]
+            ]]
+    }
+    
 
 
 onClick =
@@ -125,11 +135,10 @@ viewTup ( a, b ) =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    changes LocationUpdated
+    changes processLocation
 
 
-init : ( Model, Cmd Msg )
-init =
+init _ =
     ( defaultModel, Cmd.none )
 
 
@@ -149,7 +158,7 @@ defaultLocation =
     , accuracy = 0.0
     , altitude = Nothing
     , movement = Nothing
-    , timestamp = 0.0
+    , timestamp = Time.millisToPosix 0
     }
 
 
@@ -165,3 +174,6 @@ isDifferentFrom threshold oldLocation newLocation =
             sqrt <| difLat * difLat + difLong * difLong
     in
         metric > threshold
+
+
+processLocation value = JD.decodeValue locationDecoder value |> LocationUpdated
