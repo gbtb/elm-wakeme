@@ -6,6 +6,7 @@
     <title>Wakeme</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="index.js"></script>
+    <script type="text/javascript" src="//localhost:35729/livereload.js?snipver=1" async="" defer=""></script>
 </head>
 <body>
     <div id="elm"></div>
@@ -18,7 +19,6 @@ var app = Elm.Main.init({
 });
 
 function success(rawPosition) {
-    console.log(rawPosition);
     var coords = rawPosition.coords;
 
 	var rawAltitude = coords.altitude;

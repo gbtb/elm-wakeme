@@ -10,6 +10,7 @@ import Maps.Map
 import Maps.Marker
 import Maps.Convert
 import Browser.Events
+import Browser.Dom exposing (getElement)
 import Element
 import Json.Decode
 import List.Extra as Lis
@@ -17,7 +18,8 @@ import Html.Events.Extra.Mouse as Mouse
 import Time
 import Json.Decode as JD
 import GeolocationDecoders exposing (locationDecoder)
-
+import Task
+import Html.Attributes exposing (id)
 
 type alias Model =
     { desiredLocation : Location
@@ -49,6 +51,7 @@ type Msg
     | LocationUpdated (Result JD.Error Location)
     | ClickOnMap Mouse.Event
     | TopClick Mouse.Event
+    | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -56,6 +59,16 @@ update msgArg model =
     case msgArg of
         NoOp ->
             ( model, Cmd.none )
+
+        UpdateMapWindowPosition res ->
+            case res of
+                Ok elem -> 
+                    let e = (Debug.log "e" elem) in
+                    ({model | topPos =  e.element.y}, Cmd.none)
+
+                Err e ->
+                    (model, Cmd.none)
+
 
         MapsMsg msg ->
             let
@@ -75,39 +88,42 @@ update msgArg model =
                             model.map
                                 |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
                                 |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") pos ])
+
+                        mapElemPos = getElement "mapWindow"
                     in
                         if newLocation |> isDifferentFrom 0.01 model.currentLocation then
                             ( { model
                                 | currentLocation = newLocation
                                 , map = updatedMap
                             }
-                            , Cmd.none
+                            , Task.attempt UpdateMapWindowPosition mapElemPos
                             )
                         else
-                            ( model, Cmd.none )
+                            ( model, Task.attempt UpdateMapWindowPosition mapElemPos )
                 
                 Err e -> Debug.log (JD.errorToString e) ( model, Cmd.none )
 
         ClickOnMap event ->
             let
                 x =
-                    Tuple.first event.clientPos
+                    Tuple.first event.screenPos
 
                 y =
-                    model.topPos - Tuple.second event.clientPos
+                    Tuple.second event.screenPos - 2*model.topPos --- Tuple.second event.offsetPos
 
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
             in
                 ( { model
-                    | clientPos = event.pagePos
+                    | clientPos = event.screenPos,
+                    offsetPos = (x,y)
                     , map = model.map |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") markerPos ])
                   }
                 , Cmd.none
                 )
 
         TopClick ev ->
-            ( { model | topPos = Tuple.second ev.clientPos }, Cmd.none )
+            ( model, Cmd.none )
 
 
 view : Model -> {title: String, body: List (Html Msg)}
@@ -118,7 +134,7 @@ view model = {
             [ Element.text "New Html Program"
             , Element.text <| viewTup model.clientPos
             , Element.text <| viewTup model.offsetPos
-            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
+            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow") ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
             ]]
     }
     
@@ -177,3 +193,4 @@ isDifferentFrom threshold oldLocation newLocation =
 
 
 processLocation value = JD.decodeValue locationDecoder value |> LocationUpdated
+
