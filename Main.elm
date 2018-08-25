@@ -1,13 +1,19 @@
 module Main exposing (..)
 
+import Browser
 import Html exposing (..)
+import Html.Events
 import Geolocation exposing (..)
 import Maps
 import Maps.Geo
 import Maps.Map
 import Maps.Marker
 import Maps.Convert
-import Mouse
+import Browser.Events
+import Element
+import Json.Decode
+import List.Extra as Lis
+import Html.Events.Extra.Mouse as Mouse
 
 
 type alias Model =
@@ -16,12 +22,13 @@ type alias Model =
     , map : Maps.Model Data
     , clientPos : ( Float, Float )
     , offsetPos : ( Float, Float )
+    , topPos : Float
     }
 
 
 main : Program Never Model Msg
 main =
-    Html.program
+    Browser.application
         { init = init
         , view = view
         , update = update
@@ -38,11 +45,12 @@ type Msg
     | MapsMsg (Maps.Msg Data)
     | LocationUpdated Location
     | ClickOnMap Mouse.Event
+    | TopClick Mouse.Event
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
+update msgArg model =
+    case msgArg of
         NoOp ->
             ( model, Cmd.none )
 
@@ -75,30 +83,44 @@ update msg model =
 
         ClickOnMap event ->
             let
+                x =
+                    Tuple.first event.clientPos
+
+                y =
+                    model.topPos - Tuple.second event.clientPos
+
                 markerPos =
-                    Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = Tuple.first event.clientPos, y = Tuple.second event.clientPos }
+                    Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
             in
                 ( { model
                     | clientPos = event.pagePos
-                    , offsetPos = event.offsetPos
                     , map = model.map |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom (Html.text "*") markerPos ])
                   }
                 , Cmd.none
                 )
 
+        TopClick ev ->
+            ( { model | topPos = Tuple.second ev.clientPos }, Cmd.none )
+
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ text "New Html Program"
-        , text <| viewTup model.clientPos
-        , text <| viewTup model.offsetPos
-        , Html.div [ Mouse.onClick ClickOnMap ] [ Html.map MapsMsg <| Maps.view model.map ]
-        ]
+    Element.layout [] <|
+        Element.column [ Element.htmlAttribute <| onClick TopClick ]
+            [ Element.text "New Html Program"
+            , Element.text <| viewTup model.clientPos
+            , Element.text <| viewTup model.offsetPos
+            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
+            ]
+
+
+onClick =
+    { stopPropagation = False, preventDefault = False }
+        |> Mouse.onWithOptions "click"
 
 
 viewTup ( a, b ) =
-    toString a ++ ":" ++ toString b ++ "\n"
+    Debug.toString a ++ ":" ++ Debug.toString b ++ "\n"
 
 
 subscriptions : Model -> Sub Msg
@@ -117,6 +139,7 @@ defaultModel =
     , map = Maps.defaultModel
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
+    , topPos = 0
     }
 
 
