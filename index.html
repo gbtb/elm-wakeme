@@ -50,6 +50,10 @@ function success(rawPosition) {
     app.ports.changes.send(ret);
 }
 
+app.ports.getCurrentPosition.subscribe(function(){
+	navigator.geolocation.getCurrentPosition(success, error, options);
+});
+
 function error(err) {
   console.warn('ERROR(' + err.code + '): ' + err.message);
 }

@@ -49,6 +49,8 @@ type alias MovingData = { speed : Float, degreesFromNorth : Float }
 
 port changes : (Value -> msg) -> Sub msg
 
+port getCurrentPosition :  () -> Cmd msg
+
 
 posixDecoder : JD.Decoder Posix
 posixDecoder =

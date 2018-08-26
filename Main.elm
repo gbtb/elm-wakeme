@@ -12,6 +12,7 @@ import Maps.Convert
 import Browser.Events
 import Browser.Dom exposing (getElement)
 import Element
+import Element.Input
 import Json.Decode
 import List.Extra as Lis
 import Html.Events.Extra.Mouse as Mouse
@@ -21,6 +22,7 @@ import GeolocationDecoders exposing (locationDecoder)
 import Task
 import Html.Attributes exposing (id)
 import Maps.Geo exposing (LatLng, latLng)
+import Array
 
 type alias Model =
     { desiredLocation : LatLng
@@ -50,6 +52,7 @@ type Msg
     = NoOp
     | MapsMsg (Maps.Msg Data)
     | LocationUpdated (Result JD.Error Location)
+    | UpdateLocation 
     | ClickOnMap Mouse.Event
     | TopClick Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
@@ -88,7 +91,7 @@ update msgArg model =
                         updatedMap =
                             model.map
                                 |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
-                                |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom positionMarker pos ])
+                                |> Maps.updateMarkers (updateMarker 0 (Maps.Marker.createCustom positionMarker pos))
 
                     in
                         if newLocation |> isDifferentFrom 0.01 model.currentLocation then
@@ -102,6 +105,8 @@ update msgArg model =
                             ( model, Cmd.none )
                 
                 Err e -> Debug.log (JD.errorToString e) ( model, Cmd.none )
+
+        UpdateLocation -> (model, getCurrentPosition () )
 
         ClickOnMap event ->
             let
@@ -117,7 +122,7 @@ update msgArg model =
                 ( { model
                     | clientPos = event.screenPos,
                     offsetPos = (x,y)
-                    , map = model.map |> Maps.updateMarkers (\_ -> [ Maps.Marker.createCustom targetMarker markerPos ])
+                    , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom targetMarker markerPos))
                     , desiredLocation = markerPos
                   }
                 , Cmd.none
@@ -127,12 +132,17 @@ update msgArg model =
             ( model, Cmd.none )
 
 
+updateMarker idx marker markers = Array.fromList markers |>
+    Array.set idx marker |> Array.toList
+
 view : Model -> {title: String, body: List (Html Msg)}
 view model = {
     title = "Wakeme",
     body = [Element.layout [] <|
         Element.column [ Element.htmlAttribute <| onClick TopClick ]
-            [ Element.text "New Html Program"
+            [ Element.Input.button [] { onPress = Just UpdateLocation
+                    , label = Element.text "Update Location"
+                    }
             , Element.text <| viewTup model.clientPos
             , Element.text <| viewTup model.offsetPos
             , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow") ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
@@ -164,9 +174,10 @@ init _ =
 
 
 defaultModel =
+    let dummyMarker = Maps.Marker.createCustom (Html.text "") <| Maps.Geo.latLng 0 0 in
     { currentLocation = defaultLocation
     , desiredLocation = latLng 0 0
-    , map = Maps.defaultModel
+    , map = Maps.defaultModel |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
     , topPos = 0
