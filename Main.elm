@@ -11,11 +11,11 @@ import Maps.Marker
 import Maps.Convert
 import Browser.Events
 import Browser.Dom exposing (getElement)
-import Element
+import Element exposing (maximum, fill)
 import Element.Input
 import Json.Decode
-import List.Extra as Lis
 import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Touch as Touch
 import Time
 import Json.Decode as JD
 import GeolocationDecoders exposing (locationDecoder)
@@ -54,7 +54,6 @@ type Msg
     | LocationUpdated (Result JD.Error Location)
     | UpdateLocation 
     | ClickOnMap Mouse.Event
-    | TopClick Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
 
 
@@ -110,26 +109,25 @@ update msgArg model =
 
         ClickOnMap event ->
             let
+
+                e = Debug.log "e" event
                 x =
-                    Tuple.first event.screenPos
+                    Tuple.first event.clientPos
 
                 y =
-                    Tuple.second event.screenPos - 2*model.topPos --- Tuple.second event.offsetPos
+                    Tuple.second event.clientPos - model.topPos --- Tuple.second event.offsetPos
 
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
             in
                 ( { model
-                    | clientPos = event.screenPos,
+                    | clientPos = event.clientPos,
                     offsetPos = (x,y)
                     , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom targetMarker markerPos))
                     , desiredLocation = markerPos
                   }
                 , Cmd.none
                 )
-
-        TopClick ev ->
-            ( model, Cmd.none )
 
 
 updateMarker idx marker markers = Array.fromList markers |>
@@ -139,13 +137,16 @@ view : Model -> {title: String, body: List (Html Msg)}
 view model = {
     title = "Wakeme",
     body = [Element.layout [] <|
-        Element.column [ Element.htmlAttribute <| onClick TopClick ]
+        Element.column [ Element.width (fill
+                    |> maximum 300) ]
             [ Element.Input.button [] { onPress = Just UpdateLocation
                     , label = Element.text "Update Location"
                     }
             , Element.text <| viewTup model.clientPos
             , Element.text <| viewTup model.offsetPos
-            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow") ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
+            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow"),
+            Element.htmlAttribute <| onTouch ClickOnMap, Element.htmlAttribute (id "mapWindow")
+             ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
             ]]
     }
     
@@ -158,6 +159,10 @@ targetMarker = Html.text "\u{29BF}"
 onClick =
     { stopPropagation = False, preventDefault = False }
         |> Mouse.onWithOptions "click"
+
+
+onTouch = { stopPropagation = False, preventDefault = False }
+        |> Mouse.onWithOptions "touchend"
 
 
 viewTup ( a, b ) =
@@ -177,7 +182,9 @@ defaultModel =
     let dummyMarker = Maps.Marker.createCustom (Html.text "") <| Maps.Geo.latLng 0 0 in
     { currentLocation = defaultLocation
     , desiredLocation = latLng 0 0
-    , map = Maps.defaultModel |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
+    , map = Maps.defaultModel 
+        |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
+        |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400 )
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
     , topPos = 0
