@@ -12,7 +12,7 @@ import Maps.Convert
 import Browser.Events
 import Browser.Dom exposing (getElement)
 import Element exposing (maximum, fill)
-import Element.Input
+import Element.Input as Input
 import Json.Decode
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
@@ -23,6 +23,8 @@ import Task
 import Html.Attributes exposing (id)
 import Maps.Geo exposing (LatLng, latLng)
 import Array
+import Svg
+import Svg.Attributes as Svg
 
 type alias Model =
     { desiredLocation : LatLng
@@ -31,6 +33,7 @@ type alias Model =
     , clientPos : ( Float, Float )
     , offsetPos : ( Float, Float )
     , topPos : Float
+    , radius : Float
     }
 
 
@@ -55,6 +58,7 @@ type Msg
     | UpdateLocation 
     | ClickOnMap Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
+    | RadiusChange Float
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -119,19 +123,28 @@ update msgArg model =
 
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
+
+                marker = targetMarker model
             in
                 ( { model
                     | clientPos = event.clientPos,
                     offsetPos = (x,y)
-                    , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom targetMarker markerPos))
+                    , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
                     , desiredLocation = markerPos
                   }
                 , Cmd.none
                 )
 
+        RadiusChange r ->
+            ({model | radius = r, map = refreshTargetMarker model}, Cmd.none)
+
 
 updateMarker idx marker markers = Array.fromList markers |>
     Array.set idx marker |> Array.toList
+
+
+refreshTargetMarker model = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation))
+
 
 view : Model -> {title: String, body: List (Html Msg)}
 view model = {
@@ -139,11 +152,12 @@ view model = {
     body = [Element.layout [] <|
         Element.column [ Element.width (fill
                     |> maximum 300) ]
-            [ Element.Input.button [] { onPress = Just UpdateLocation
+            [ Input.button [] { onPress = Just UpdateLocation
                     , label = Element.text "Update Location"
                     }
             , Element.text <| viewTup model.clientPos
             , Element.text <| viewTup model.offsetPos
+            , viewRadiusSlider model
             , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow"),
             Element.htmlAttribute <| onTouch ClickOnMap, Element.htmlAttribute (id "mapWindow")
              ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
@@ -153,7 +167,27 @@ view model = {
 
 positionMarker = Html.text "➘"
 
-targetMarker = Html.text "\u{29BF}"
+viewRadiusSlider model = Input.slider [] {
+    min = 0.1,
+    max = 10,
+    thumb = Input.defaultThumb,
+    value = model.radius,
+    step = Just 0.1,
+    label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat model.radius ++ " km",
+    onChange = RadiusChange
+    }
+
+targetMarker model =
+    let 
+        map = Maps.Convert.getMap model.map
+        metersPerPx = pixelLength map.center.lat map.zoom
+        radius = model.radius * 1000 / metersPerPx
+    in
+     Svg.svg [ Svg.width "200"
+    , Svg.height "200"
+    , Svg.viewBox "0 0 200 200"
+    ] 
+    [Svg.circle [ Svg.cx "100", Svg.cy "100", Svg.r <| String.fromFloat radius, Svg.color "#FFFFFF" ] []]
 
 
 onClick =
@@ -161,7 +195,7 @@ onClick =
         |> Mouse.onWithOptions "click"
 
 
-onTouch = { stopPropagation = False, preventDefault = False }
+onTouch = { stopPropagation = False, preventDefault = True }
         |> Mouse.onWithOptions "touchend"
 
 
@@ -188,6 +222,7 @@ defaultModel =
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
     , topPos = 0
+    , radius = 0.1
     }
 
 
@@ -217,3 +252,7 @@ isDifferentFrom threshold oldLocation newLocation =
 
 processLocation value = JD.decodeValue locationDecoder value |> LocationUpdated
 
+
+--taken from https://wiki.openstreetmap.org/wiki/Zoom_levels
+c = pi * 6378137
+pixelLength lat zoomLevel = c * cos (degrees lat) / ( 2 ^ (zoomLevel + 8) )
