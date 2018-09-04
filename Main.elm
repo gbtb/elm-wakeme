@@ -9,6 +9,7 @@ import Maps.Geo
 import Maps.Map
 import Maps.Marker
 import Maps.Convert
+import Maps.Internal.Maps exposing (Msg(..))
 import Browser.Events
 import Browser.Dom exposing (getElement)
 import Element exposing (maximum, fill)
@@ -80,9 +81,18 @@ update msgArg model =
         MapsMsg msg ->
             let
                 ( updatedMap, cmds ) =
-                    Maps.update msg model.map
+                    Maps.update msg model.map 
+                    --zoom, pinch
             in
-                ( { model | map = updatedMap }, Cmd.map MapsMsg cmds )
+                case msg of
+                    Zoom _ val ->
+                        let 
+                            oldZoom = Maps.Convert.getMap model.map |> .zoom
+                            newModel = { model | map = updatedMap } |>
+                                if floor (oldZoom + val) /= floor oldZoom then refreshTargetMarker else identity
+                        in
+                        ( newModel, Cmd.map MapsMsg cmds )
+                    _ -> ( {model| map = updatedMap}, Cmd.map MapsMsg cmds )
 
         LocationUpdated locationRes ->
             case locationRes of
@@ -136,14 +146,16 @@ update msgArg model =
                 )
 
         RadiusChange r ->
-            ({model | radius = r, map = refreshTargetMarker model}, Cmd.none)
+            ({model | radius = r} |> refreshTargetMarker, Cmd.none)
 
 
 updateMarker idx marker markers = Array.fromList markers |>
     Array.set idx marker |> Array.toList
 
 
-refreshTargetMarker model = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation))
+refreshTargetMarker model = 
+    let updatedMap = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation)) in
+    { model | map = updatedMap }
 
 
 view : Model -> {title: String, body: List (Html Msg)}
@@ -169,7 +181,7 @@ positionMarker = Html.text "➘"
 
 viewRadiusSlider model = Input.slider [] {
     min = 0.1,
-    max = 10,
+    max = 2,
     thumb = Input.defaultThumb,
     value = model.radius,
     step = Just 0.1,
@@ -182,12 +194,13 @@ targetMarker model =
         map = Maps.Convert.getMap model.map
         metersPerPx = pixelLength map.center.lat map.zoom
         radius = model.radius * 1000 / metersPerPx
+        a = radius * 2 |> String.fromFloat
     in
-     Svg.svg [ Svg.width "200"
-    , Svg.height "200"
-    , Svg.viewBox "0 0 200 200"
+     Svg.svg [ Svg.width a
+    , Svg.height a
+    , Svg.viewBox <|"0 0" ++ a ++ " " ++ a
     ] 
-    [Svg.circle [ Svg.cx "100", Svg.cy "100", Svg.r <| String.fromFloat radius, Svg.color "#FFFFFF" ] []]
+    [Svg.circle [ Svg.cx (String.fromFloat radius), Svg.cy (String.fromFloat radius), Svg.r <| String.fromFloat radius, Svg.opacity "0.25" ] []]
 
 
 onClick =
