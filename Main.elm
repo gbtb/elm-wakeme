@@ -1,4 +1,4 @@
-module Main exposing (Data, Model, Msg(..), c, defaultLocation, defaultModel, getCurrentPosition, init, isDifferentFrom, main, onClick, onTouch, pixelLength, positionMarker, refreshTargetMarker, subscriptions, targetMarker, update, updateMarker, view, viewAudio, viewRadiusSlider, viewTup)
+module Main exposing (Data, Model, Msg(..), defaultLocation, defaultModel, getCurrentPosition, init, isDifferentFrom, main, onClick, onTouch, pixelLength, positionMarker, refreshTargetMarker, subscriptions, targetMarker, update, updateMarker, view, viewAudio, viewRadiusSlider, viewTup)
 
 import Array
 import Browser
@@ -31,6 +31,7 @@ import Time
 type alias Model =
     { desiredLocation : LatLng
     , currentLocation : Location
+    , distance : Float
     , map : Maps.Model Data
     , clientPos : ( Float, Float )
     , offsetPos : ( Float, Float )
@@ -140,6 +141,7 @@ update msgArg model =
               }
             , Cmd.none
             )
+                |> updateDistance
 
         RadiusChange r ->
             ( { model | radius = r } |> refreshTargetMarker, Cmd.none )
@@ -164,12 +166,28 @@ updateOnPortMsg msg model =
                   }
                 , Cmd.none
                 )
+                    |> updateDistance
 
             else
                 ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
+
+
+updateDistance ( model, cmd ) =
+    let
+        distance =
+            haversine (locationToLatLng model.currentLocation) model.desiredLocation
+
+        playCmd =
+            if distance <= model.radius * 1000 then
+                playAlarm
+
+            else
+                Cmd.none
+    in
+    ( { model | distance = distance }, Cmd.batch [ cmd, playCmd ] )
 
 
 updateMarker idx marker markers =
@@ -202,8 +220,9 @@ view model =
                     , label = Element.text "Update Location"
                     }
                 , Element.text <| viewTup model.clientPos
-                , Element.text <| viewTup model.offsetPos
+                , Element.text <| "distance: " ++ String.fromFloat model.distance
                 , viewRadiusSlider model
+                , viewAudio
                 , Element.el
                     [ Element.htmlAttribute <| onClick ClickOnMap
                     , Element.htmlAttribute (id "mapWindow")
@@ -258,7 +277,8 @@ targetMarker model =
 
 
 viewAudio =
-    Html.audio [ Html.Attributes.src "alarm.mp3" ] []
+    Element.html <|
+        Html.audio [ Html.Attributes.src "alarm.mp3", Html.Attributes.id "alarm" ] []
 
 
 onClick =
@@ -291,6 +311,7 @@ defaultModel =
     in
     { currentLocation = defaultLocation
     , desiredLocation = latLng 0 0
+    , distance = 0
     , map =
         Maps.defaultModel
             |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
@@ -330,17 +351,43 @@ processIncomingMsg value =
     JD.decodeValue incomingMsgDecoder value |> Result.map PortMsg |> Result.withDefault NoOp
 
 
+locationToLatLng loc =
+    latLng loc.latitude loc.longitude
+
+
 
 --taken from https://wiki.openstreetmap.org/wiki/Zoom_levels
 
 
-c =
+circ =
     pi * 6378137
 
 
 pixelLength lat zoomLevel =
-    c * cos (degrees lat) / (2 ^ (zoomLevel + 8))
+    circ * cos (degrees lat) / (2 ^ (zoomLevel + 8))
+
+
+haversine : LatLng -> LatLng -> Float
+haversine p1 p2 =
+    let
+        sqSin getter =
+            sin (degrees <| (getter p1 - getter p2) / 2) ^ 2
+
+        a =
+            sqSin .lat + cos (degrees p1.lat) * cos (degrees p2.lat) * sqSin .lng
+
+        c =
+            2 * atan2 (sqrt a) (sqrt (1 - a))
+
+        r =
+            6371 * 1000
+    in
+    r * c
 
 
 getCurrentPosition =
     outgoingPort <| outgoingMsgEncoder GetCurrentPosition
+
+
+playAlarm =
+    outgoingPort <| outgoingMsgEncoder StartAlarm
