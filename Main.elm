@@ -32,6 +32,7 @@ type alias Model =
     { desiredLocation : LatLng
     , currentLocation : Location
     , distance : Float
+    , alarmRunning : Bool
     , map : Maps.Model Data
     , clientPos : ( Float, Float )
     , offsetPos : ( Float, Float )
@@ -144,7 +145,7 @@ update msgArg model =
                 |> updateDistance
 
         RadiusChange r ->
-            ( { model | radius = r } |> refreshTargetMarker, Cmd.none )
+            ( { model | radius = r } |> refreshTargetMarker, Cmd.none ) |> updateDistance
 
 
 updateOnPortMsg msg model =
@@ -171,6 +172,9 @@ updateOnPortMsg msg model =
             else
                 ( model, Cmd.none )
 
+        AlarmWasStopped ->
+            ( { model | alarmRunning = False }, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -180,14 +184,22 @@ updateDistance ( model, cmd ) =
         distance =
             haversine (locationToLatLng model.currentLocation) model.desiredLocation
 
+        dist =
+            distance <= model.radius * 1000
+
         playCmd =
-            if distance <= model.radius * 1000 then
+            if dist && not model.alarmRunning then
                 playAlarm
 
             else
                 Cmd.none
     in
-    ( { model | distance = distance }, Cmd.batch [ cmd, playCmd ] )
+    ( { model
+        | distance = distance
+        , alarmRunning = model.alarmRunning || dist
+      }
+    , Cmd.batch [ cmd, playCmd ]
+    )
 
 
 updateMarker idx marker markers =
@@ -278,7 +290,7 @@ targetMarker model =
 
 viewAudio =
     Element.html <|
-        Html.audio [ Html.Attributes.src "alarm.mp3", Html.Attributes.id "alarm" ] []
+        Html.audio [ Html.Attributes.src "alarm.mp3", Html.Attributes.id "alarm", Html.Attributes.attribute "loop" "true" ] []
 
 
 onClick =
@@ -312,6 +324,7 @@ defaultModel =
     { currentLocation = defaultLocation
     , desiredLocation = latLng 0 0
     , distance = 0
+    , alarmRunning = False
     , map =
         Maps.defaultModel
             |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)

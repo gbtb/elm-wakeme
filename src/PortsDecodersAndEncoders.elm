@@ -19,6 +19,7 @@ incomingMsgDecoder =
     JD.oneOf
         [ JD.field "LocationUpdate" (JD.map LocationUpdate locationDecoder)
         , JD.field "LocationUpdateError" (JD.map LocationUpdateError JD.string)
+        , JD.field "AlarmWasStopped" (JD.succeed AlarmWasStopped)
         ]
 
 
@@ -80,6 +81,9 @@ incomingMsgEncoder value =
 
         LocationUpdateError v1 ->
             JE.object [ ( "LocationUpdateError", JE.string v1 ) ]
+
+        AlarmWasStopped ->
+            JE.object [ ( "AlarmWasStopped", JE.null ) ]
 
 
 locationEncoder : Location -> JE.Value

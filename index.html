@@ -12,7 +12,7 @@
     <div id="elm"></div>
 </body>
 <script>
-var id, target, options;
+var id, target, options, notification;
 
 var app = Elm.Main.init({
   node: document.getElementById('elm')
@@ -58,6 +58,9 @@ app.ports.outgoingPort.subscribe(function(value){
 
 	if (value.hasOwnProperty('StartAlarm'))
 		playAlarm();
+
+	if (value.hasOwnProperty('StopAlarm'))
+		stopAlarm();
 	
 });
 
@@ -68,7 +71,36 @@ function error(err) {
 
 function playAlarm(){
 	const alarm = document.getElementById("alarm");
-	alarm.play(); 
+	alarm.play();
+
+	if(Notification.permission === 'default'){
+		Notification.requestPermission()
+		.then(
+			showNotification
+		)
+	}else if (Notification.permission === 'granted'){
+		showNotification('granted')
+	}
+}
+
+function showNotification(permission){
+	if(permission !== 'granted')
+		return;
+
+	notification = new Notification("Proximity alert!", {
+		requireInteraction: true
+	});
+
+	notification.onclick = () => stopAlarm();
+	notification.onclose = () => stopAlarm();
+	notification.onerror = () => stopAlarm();
+}
+
+function stopAlarm(){
+	const alarm = document.getElementById("alarm");
+	alarm.pause();
+	notification.close();
+	app.ports.incomingPort.send({AlarmWasStopped: null});
 }
 
 options = {

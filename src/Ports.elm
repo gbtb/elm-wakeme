@@ -19,3 +19,4 @@ type OutgoingMsg
 type IncomingMsg
     = LocationUpdate Location
     | LocationUpdateError String
+    | AlarmWasStopped
