@@ -5,6 +5,8 @@ import Browser
 import Browser.Dom exposing (getElement)
 import Browser.Events
 import Element exposing (fill, maximum)
+import Element.Background as Background
+import Element.Border as Border
 import Element.Input as Input
 import Geolocation exposing (..)
 import GeolocationDecoders exposing (locationDecoder)
@@ -22,6 +24,7 @@ import Maps.Map
 import Maps.Marker
 import Ports exposing (..)
 import PortsDecodersAndEncoders exposing (..)
+import Round
 import Svg
 import Svg.Attributes as Svg
 import Task
@@ -33,9 +36,8 @@ type alias Model =
     , currentLocation : Location
     , distance : Float
     , alarmRunning : Bool
+    , enabled : Bool
     , map : Maps.Model Data
-    , clientPos : ( Float, Float )
-    , offsetPos : ( Float, Float )
     , topPos : Float
     , radius : Float
     }
@@ -63,6 +65,7 @@ type Msg
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
     | RadiusChange Float
     | PortMsg IncomingMsg
+    | EnableTarget Bool
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -118,16 +121,12 @@ update msgArg model =
 
         ClickOnMap event ->
             let
-                e =
-                    Debug.log "e" event
-
                 x =
                     Tuple.first event.clientPos
 
                 y =
                     Tuple.second event.clientPos - model.topPos
 
-                --- Tuple.second event.offsetPos
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
 
@@ -135,9 +134,7 @@ update msgArg model =
                     targetMarker model
             in
             ( { model
-                | clientPos = event.clientPos
-                , offsetPos = ( x, y )
-                , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
+                | map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
                 , desiredLocation = markerPos
               }
             , Cmd.none
@@ -146,6 +143,17 @@ update msgArg model =
 
         RadiusChange r ->
             ( { model | radius = r } |> refreshTargetMarker, Cmd.none ) |> updateDistance
+
+        EnableTarget b ->
+            let
+                cmd =
+                    if model.alarmRunning && not b then
+                        stopAlarm
+
+                    else
+                        Cmd.none
+            in
+            ( { model | enabled = b }, cmd )
 
 
 updateOnPortMsg msg model =
@@ -220,19 +228,17 @@ view : Model -> { title : String, body : List (Html Msg) }
 view model =
     { title = "Wakeme"
     , body =
-        [ Element.layout [] <|
+        [ Element.layout [ Background.color colors.papaya ] <|
             Element.column
                 [ Element.width
                     (fill
                         |> maximum 300
                     )
+                , Element.padding 10
+                , Element.spacing 20
                 ]
-                [ Input.button []
-                    { onPress = Just UpdateLocation
-                    , label = Element.text "Update Location"
-                    }
-                , Element.text <| viewTup model.clientPos
-                , Element.text <| "distance: " ++ String.fromFloat model.distance
+                [ viewCheckbox model
+                , Element.text <| "distance: " ++ Round.round 0 model.distance ++ " m"
                 , viewRadiusSlider model
                 , viewAudio
                 , Element.el
@@ -254,8 +260,14 @@ positionMarker =
     Html.text "➘"
 
 
+colors =
+    { aqua = Element.rgba255 97 201 168 1.0
+    , papaya = Element.rgba255 255 238 219 0.5
+    }
+
+
 viewRadiusSlider model =
-    Input.slider []
+    Input.slider [ Background.color colors.aqua ]
         { min = 0.1
         , max = 2
         , thumb = Input.defaultThumb
@@ -263,6 +275,21 @@ viewRadiusSlider model =
         , step = Just 0.1
         , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat model.radius ++ " km"
         , onChange = RadiusChange
+        }
+
+
+viewCheckbox model =
+    Input.checkbox []
+        { label = Input.labelLeft [] <| Element.text "Enabled"
+        , icon =
+            \x ->
+                if x then
+                    Element.text "x"
+
+                else
+                    Element.text "o"
+        , checked = model.enabled
+        , onChange = EnableTarget
         }
 
 
@@ -325,12 +352,11 @@ defaultModel =
     , desiredLocation = latLng 0 0
     , distance = 0
     , alarmRunning = False
+    , enabled = False
     , map =
         Maps.defaultModel
             |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
             |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400)
-    , clientPos = ( 0, 0 )
-    , offsetPos = ( 0, 0 )
     , topPos = 0
     , radius = 0.1
     }
@@ -404,3 +430,7 @@ getCurrentPosition =
 
 playAlarm =
     outgoingPort <| outgoingMsgEncoder StartAlarm
+
+
+stopAlarm =
+    outgoingPort <| outgoingMsgEncoder StopAlarm
