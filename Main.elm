@@ -1,31 +1,32 @@
-module Main exposing (..)
+module Main exposing (Data, Model, Msg(..), c, defaultLocation, defaultModel, getCurrentPosition, init, isDifferentFrom, main, onClick, onTouch, pixelLength, positionMarker, refreshTargetMarker, subscriptions, targetMarker, update, updateMarker, view, viewAudio, viewRadiusSlider, viewTup)
 
+import Array
 import Browser
-import Html exposing (..)
-import Html.Events
-import Geolocation exposing (..)
-import Maps
-import Maps.Geo
-import Maps.Map
-import Maps.Marker
-import Maps.Convert
-import Maps.Internal.Maps exposing (Msg(..))
-import Browser.Events
 import Browser.Dom exposing (getElement)
-import Element exposing (maximum, fill)
+import Browser.Events
+import Element exposing (fill, maximum)
 import Element.Input as Input
-import Json.Decode
+import Geolocation exposing (..)
+import GeolocationDecoders exposing (locationDecoder)
+import Html exposing (..)
+import Html.Attributes exposing (id)
+import Html.Events
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Time
 import Json.Decode as JD
-import GeolocationDecoders exposing (locationDecoder)
-import Task
-import Html.Attributes exposing (id)
+import Maps
+import Maps.Convert
 import Maps.Geo exposing (LatLng, latLng)
-import Array
+import Maps.Internal.Maps exposing (Msg(..))
+import Maps.Map
+import Maps.Marker
+import Ports exposing (..)
+import PortsDecodersAndEncoders exposing (..)
 import Svg
 import Svg.Attributes as Svg
+import Task
+import Time
+
 
 type alias Model =
     { desiredLocation : LatLng
@@ -55,11 +56,11 @@ type alias Data =
 type Msg
     = NoOp
     | MapsMsg (Maps.Msg Data)
-    | LocationUpdated (Result JD.Error Location)
-    | UpdateLocation 
+    | UpdateLocation
     | ClickOnMap Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
     | RadiusChange Float
+    | PortMsg IncomingMsg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -70,137 +71,194 @@ update msgArg model =
 
         UpdateMapWindowPosition res ->
             case res of
-                Ok elem -> 
-                    let e = (Debug.log "e" elem) in
-                    ({model | topPos =  e.element.y}, Cmd.none)
+                Ok elem ->
+                    let
+                        e =
+                            Debug.log "e" elem
+                    in
+                    ( { model | topPos = e.element.y }, Cmd.none )
 
                 Err e ->
-                    (model, Cmd.none)
-
+                    ( model, Cmd.none )
 
         MapsMsg msg ->
             let
                 ( updatedMap, cmds ) =
-                    Maps.update msg model.map 
-                    --zoom, pinch
+                    Maps.update msg model.map
+
+                --zoom, pinch
             in
-                case msg of
-                    Zoom _ val ->
-                        let 
-                            oldZoom = Maps.Convert.getMap model.map |> .zoom
-                            newModel = { model | map = updatedMap } |>
-                                if floor (oldZoom + val) /= floor oldZoom then refreshTargetMarker else identity
-                        in
-                        ( newModel, Cmd.map MapsMsg cmds )
-                    _ -> ( {model| map = updatedMap}, Cmd.map MapsMsg cmds )
-
-        LocationUpdated locationRes ->
-            case locationRes of
-                Ok newLocation ->
+            case msg of
+                Zoom _ val ->
                     let
-                        pos =
-                            Maps.Geo.latLng newLocation.latitude newLocation.longitude
+                        oldZoom =
+                            Maps.Convert.getMap model.map |> .zoom
 
-                        updatedMap =
-                            model.map
-                                |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
-                                |> Maps.updateMarkers (updateMarker 0 (Maps.Marker.createCustom positionMarker pos))
+                        newModel =
+                            { model | map = updatedMap }
+                                |> (if floor (oldZoom + val) /= floor oldZoom then
+                                        refreshTargetMarker
 
+                                    else
+                                        identity
+                                   )
                     in
-                        if newLocation |> isDifferentFrom 0.01 model.currentLocation then
-                            ( { model
-                                | currentLocation = newLocation
-                                , map = updatedMap
-                            }
-                            , Cmd.none
-                            )
-                        else
-                            ( model, Cmd.none )
-                
-                Err e -> Debug.log (JD.errorToString e) ( model, Cmd.none )
+                    ( newModel, Cmd.map MapsMsg cmds )
 
-        UpdateLocation -> (model, getCurrentPosition () )
+                _ ->
+                    ( { model | map = updatedMap }, Cmd.map MapsMsg cmds )
+
+        PortMsg msg ->
+            updateOnPortMsg msg model
+
+        UpdateLocation ->
+            ( model, getCurrentPosition )
 
         ClickOnMap event ->
             let
+                e =
+                    Debug.log "e" event
 
-                e = Debug.log "e" event
                 x =
                     Tuple.first event.clientPos
 
                 y =
-                    Tuple.second event.clientPos - model.topPos --- Tuple.second event.offsetPos
+                    Tuple.second event.clientPos - model.topPos
 
+                --- Tuple.second event.offsetPos
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
 
-                marker = targetMarker model
+                marker =
+                    targetMarker model
             in
+            ( { model
+                | clientPos = event.clientPos
+                , offsetPos = ( x, y )
+                , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
+                , desiredLocation = markerPos
+              }
+            , Cmd.none
+            )
+
+        RadiusChange r ->
+            ( { model | radius = r } |> refreshTargetMarker, Cmd.none )
+
+
+updateOnPortMsg msg model =
+    case msg of
+        LocationUpdate newLocation ->
+            let
+                pos =
+                    Maps.Geo.latLng newLocation.latitude newLocation.longitude
+
+                updatedMap =
+                    model.map
+                        |> Maps.updateMap (Maps.Map.viewBounds <| Maps.Geo.centeredBounds 10 pos)
+                        |> Maps.updateMarkers (updateMarker 0 (Maps.Marker.createCustom positionMarker pos))
+            in
+            if newLocation |> isDifferentFrom 0.01 model.currentLocation then
                 ( { model
-                    | clientPos = event.clientPos,
-                    offsetPos = (x,y)
-                    , map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
-                    , desiredLocation = markerPos
+                    | currentLocation = newLocation
+                    , map = updatedMap
                   }
                 , Cmd.none
                 )
 
-        RadiusChange r ->
-            ({model | radius = r} |> refreshTargetMarker, Cmd.none)
+            else
+                ( model, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
 
 
-updateMarker idx marker markers = Array.fromList markers |>
-    Array.set idx marker |> Array.toList
+updateMarker idx marker markers =
+    Array.fromList markers
+        |> Array.set idx marker
+        |> Array.toList
 
 
-refreshTargetMarker model = 
-    let updatedMap = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation)) in
+refreshTargetMarker model =
+    let
+        updatedMap =
+            model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation))
+    in
     { model | map = updatedMap }
 
 
-view : Model -> {title: String, body: List (Html Msg)}
-view model = {
-    title = "Wakeme",
-    body = [Element.layout [] <|
-        Element.column [ Element.width (fill
-                    |> maximum 300) ]
-            [ Input.button [] { onPress = Just UpdateLocation
+view : Model -> { title : String, body : List (Html Msg) }
+view model =
+    { title = "Wakeme"
+    , body =
+        [ Element.layout [] <|
+            Element.column
+                [ Element.width
+                    (fill
+                        |> maximum 300
+                    )
+                ]
+                [ Input.button []
+                    { onPress = Just UpdateLocation
                     , label = Element.text "Update Location"
                     }
-            , Element.text <| viewTup model.clientPos
-            , Element.text <| viewTup model.offsetPos
-            , viewRadiusSlider model
-            , Element.el [ Element.htmlAttribute <| onClick ClickOnMap, Element.htmlAttribute (id "mapWindow"),
-            Element.htmlAttribute <| onTouch ClickOnMap, Element.htmlAttribute (id "mapWindow")
-             ] <| Element.html <| Html.map MapsMsg <| Maps.view model.map
-            ]]
+                , Element.text <| viewTup model.clientPos
+                , Element.text <| viewTup model.offsetPos
+                , viewRadiusSlider model
+                , Element.el
+                    [ Element.htmlAttribute <| onClick ClickOnMap
+                    , Element.htmlAttribute (id "mapWindow")
+                    , Element.htmlAttribute <| onTouch ClickOnMap
+                    , Element.htmlAttribute (id "mapWindow")
+                    ]
+                  <|
+                    Element.html <|
+                        Html.map MapsMsg <|
+                            Maps.view model.map
+                ]
+        ]
     }
-    
 
-positionMarker = Html.text "➘"
 
-viewRadiusSlider model = Input.slider [] {
-    min = 0.1,
-    max = 2,
-    thumb = Input.defaultThumb,
-    value = model.radius,
-    step = Just 0.1,
-    label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat model.radius ++ " km",
-    onChange = RadiusChange
-    }
+positionMarker =
+    Html.text "➘"
+
+
+viewRadiusSlider model =
+    Input.slider []
+        { min = 0.1
+        , max = 2
+        , thumb = Input.defaultThumb
+        , value = model.radius
+        , step = Just 0.1
+        , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat model.radius ++ " km"
+        , onChange = RadiusChange
+        }
+
 
 targetMarker model =
-    let 
-        map = Maps.Convert.getMap model.map
-        metersPerPx = pixelLength map.center.lat map.zoom
-        radius = model.radius * 1000 / metersPerPx
-        a = radius * 2 |> String.fromFloat
+    let
+        map =
+            Maps.Convert.getMap model.map
+
+        metersPerPx =
+            pixelLength map.center.lat map.zoom
+
+        radius =
+            model.radius * 1000 / metersPerPx |> round
+
+        a =
+            radius * 2 |> String.fromInt
     in
-     Svg.svg [ Svg.width a
-    , Svg.height a
-    , Svg.viewBox <|"0 0" ++ a ++ " " ++ a
-    ] 
-    [Svg.circle [ Svg.cx (String.fromFloat radius), Svg.cy (String.fromFloat radius), Svg.r <| String.fromFloat radius, Svg.opacity "0.25" ] []]
+    Svg.svg
+        [ Svg.width a
+        , Svg.height a
+        , Svg.viewBox <| "0 0 " ++ a ++ " " ++ a
+        ]
+        [ Svg.circle [ Svg.cx (String.fromInt radius), Svg.cy (String.fromInt radius), Svg.r <| String.fromInt radius, Svg.opacity "0.25" ] [] ]
+
+
+viewAudio =
+    Html.audio [ Html.Attributes.src "alarm.mp3" ] []
 
 
 onClick =
@@ -208,7 +266,8 @@ onClick =
         |> Mouse.onWithOptions "click"
 
 
-onTouch = { stopPropagation = False, preventDefault = True }
+onTouch =
+    { stopPropagation = False, preventDefault = True }
         |> Mouse.onWithOptions "touchend"
 
 
@@ -218,7 +277,7 @@ viewTup ( a, b ) =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    changes processLocation
+    incomingPort processIncomingMsg
 
 
 init _ =
@@ -226,12 +285,16 @@ init _ =
 
 
 defaultModel =
-    let dummyMarker = Maps.Marker.createCustom (Html.text "") <| Maps.Geo.latLng 0 0 in
+    let
+        dummyMarker =
+            Maps.Marker.createCustom (Html.text "") <| Maps.Geo.latLng 0 0
+    in
     { currentLocation = defaultLocation
     , desiredLocation = latLng 0 0
-    , map = Maps.defaultModel 
-        |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
-        |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400 )
+    , map =
+        Maps.defaultModel
+            |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
+            |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400)
     , clientPos = ( 0, 0 )
     , offsetPos = ( 0, 0 )
     , topPos = 0
@@ -260,12 +323,24 @@ isDifferentFrom threshold oldLocation newLocation =
         metric =
             sqrt <| difLat * difLat + difLong * difLong
     in
-        metric > threshold
+    metric > threshold
 
 
-processLocation value = JD.decodeValue locationDecoder value |> LocationUpdated
+processIncomingMsg value =
+    JD.decodeValue incomingMsgDecoder value |> Result.map PortMsg |> Result.withDefault NoOp
+
 
 
 --taken from https://wiki.openstreetmap.org/wiki/Zoom_levels
-c = pi * 6378137
-pixelLength lat zoomLevel = c * cos (degrees lat) / ( 2 ^ (zoomLevel + 8) )
+
+
+c =
+    pi * 6378137
+
+
+pixelLength lat zoomLevel =
+    c * cos (degrees lat) / (2 ^ (zoomLevel + 8))
+
+
+getCurrentPosition =
+    outgoingPort <| outgoingMsgEncoder GetCurrentPosition

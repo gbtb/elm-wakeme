@@ -1,7 +1,7 @@
 port module Geolocation exposing (..)
 
 import Time exposing (Posix)
-import Json.Encode exposing (Value)
+import Json.Encode as JE exposing (Value)
 import Json.Decode as JD
 
 
@@ -47,11 +47,11 @@ type Movement
 
 type alias MovingData = { speed : Float, degreesFromNorth : Float }
 
-port changes : (Value -> msg) -> Sub msg
-
-port getCurrentPosition :  () -> Cmd msg
-
-
 posixDecoder : JD.Decoder Posix
 posixDecoder =
     JD.map Time.millisToPosix JD.int
+
+
+posixEncoder : Posix -> Value
+posixEncoder value =
+    Time.posixToMillis value |> JE.int

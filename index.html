@@ -46,16 +46,20 @@ function success(rawPosition) {
 		altitude: altitude,
 		movement: movement,
 		timestamp: rawPosition.timestamp
-    };
-    app.ports.changes.send(ret);
+	};
+	
+	app.ports.incomingPort.send({LocationUpdate: ret});
 }
 
-app.ports.getCurrentPosition.subscribe(function(){
-	navigator.geolocation.getCurrentPosition(success, error, options);
+app.ports.outgoingPort.subscribe(function(value){
+	if (value.hasOwnProperty('GetCurrentPosition'))
+		navigator.geolocation.getCurrentPosition(success, error, options);
+	
 });
 
 function error(err) {
   console.warn('ERROR(' + err.code + '): ' + err.message);
+  app.ports.incomingPort.send({LocationUpdateError: err.message});
 }
 
 options = {
