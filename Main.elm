@@ -77,11 +77,7 @@ update msgArg model =
         UpdateMapWindowPosition res ->
             case res of
                 Ok elem ->
-                    let
-                        e =
-                            Debug.log "e" elem
-                    in
-                    ( { model | topPos = e.element.y }, Cmd.none )
+                    ( { model | topPos = elem.element.y }, Cmd.none )
 
                 Err e ->
                     ( model, Cmd.none )
@@ -196,7 +192,7 @@ updateDistance ( model, cmd ) =
             distance <= model.radius * 1000
 
         playCmd =
-            if dist && not model.alarmRunning then
+            if dist && model.enabled && not model.alarmRunning then
                 playAlarm
 
             else
@@ -263,6 +259,10 @@ positionMarker =
 colors =
     { aqua = Element.rgba255 97 201 168 1.0
     , papaya = Element.rgba255 255 238 219 0.5
+    , silver = Element.rgba255 173 168 182 0.9
+    , purple = Element.rgba255 76 59 77 0.9
+    , maroon = Element.rgba255 165 56 96 0.9
+    , white = Element.rgba255 255 255 255 1
     }
 
 
@@ -278,16 +278,41 @@ viewRadiusSlider model =
         }
 
 
+px =
+    Element.px
+
+
 viewCheckbox model =
+    let
+        v colorFull shadowOffset alignment =
+            Element.el
+                [ Element.width (px 60)
+                , Element.height (px 20)
+                , Background.color colorFull
+                , Border.rounded 2
+                , Border.innerShadow { offset = ( 0, 0 ), size = 1, blur = 3, color = colors.silver }
+                ]
+            <|
+                Element.el
+                    [ Element.width (px 30)
+                    , Element.height (px 18)
+                    , Element.centerY
+                    , alignment
+                    , Border.shadow { offset = shadowOffset, size = 1, blur = 2, color = colors.purple }
+                    , Background.gradient { angle = 0, steps = [ colors.silver, colors.white, colors.silver ] }
+                    ]
+                <|
+                    Element.text ""
+    in
     Input.checkbox []
-        { label = Input.labelLeft [] <| Element.text "Enabled"
+        { label = Input.labelLeft [] <| Element.text ""
         , icon =
             \x ->
                 if x then
-                    Element.text "x"
+                    v colors.aqua ( -1, 0 ) Element.alignRight
 
                 else
-                    Element.text "o"
+                    v colors.purple ( 1, 0 ) Element.alignLeft
         , checked = model.enabled
         , onChange = EnableTarget
         }
