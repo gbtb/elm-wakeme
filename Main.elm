@@ -4,6 +4,7 @@ import Array
 import Browser
 import Browser.Dom exposing (getElement)
 import Browser.Events
+import Dict
 import Element exposing (fill, maximum)
 import Element.Background as Background
 import Element.Border as Border
@@ -15,6 +16,7 @@ import Html.Attributes exposing (id)
 import Html.Events
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
+import Id exposing (Id)
 import Json.Decode as JD
 import Maps
 import Maps.Convert
@@ -24,6 +26,7 @@ import Maps.Map
 import Maps.Marker
 import Ports exposing (..)
 import PortsDecodersAndEncoders exposing (..)
+import Random
 import Round
 import Svg
 import Svg.Attributes as Svg
@@ -32,14 +35,26 @@ import Time
 
 
 type alias Model =
-    { desiredLocation : LatLng
-    , currentLocation : Location
+    { currentLocation : Location
     , distance : Float
     , alarmRunning : Bool
     , enabled : Bool
     , map : Maps.Model Data
     , topPos : Float
+    , destinations : Dict.Dict String Destination
+    , currentDestination : Id
+    , seed : Random.Seed
+    }
+
+
+type alias Db =
+    Dict.Dict String Destination
+
+
+type alias Destination =
+    { desiredLocation : LatLng
     , radius : Float
+    , name : String
     }
 
 
@@ -66,6 +81,7 @@ type Msg
     | RadiusChange Float
     | PortMsg IncomingMsg
     | EnableTarget Bool
+    | SetInitialSeed Random.Seed
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -73,6 +89,9 @@ update msgArg model =
     case msgArg of
         NoOp ->
             ( model, Cmd.none )
+
+        SetInitialSeed seed ->
+            ( { model | seed = seed }, Cmd.none ) |> updateInitialDestination
 
         UpdateMapWindowPosition res ->
             case res of
@@ -150,6 +169,33 @@ update msgArg model =
                         Cmd.none
             in
             ( { model | enabled = b }, cmd )
+
+
+updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+updateInitialDestination ( model, cmd ) =
+    if Dict.size model.destinations == 0 then
+        ( createDestination model, cmd )
+
+    else
+        ( model, cmd )
+
+
+createDestination model =
+    let
+        ( id, nextSeed ) =
+            Random.step Id.generator model.seed
+
+        dest =
+            { desiredLocation = latLng 0 0
+            , radius = 0.2
+            , name = "Destination " ++ String.fromInt (Dict.size model.destinations + 1)
+            }
+    in
+    { model
+        | seed = nextSeed
+        , destinations = Dict.insert (Id.toString id) dest model.destinations
+        , currentDestination = id
+    }
 
 
 updateOnPortMsg msg model =
@@ -365,7 +411,12 @@ subscriptions model =
 
 
 init _ =
-    ( defaultModel, Task.attempt UpdateMapWindowPosition <| getElement "mapWindow" )
+    ( defaultModel
+    , Cmd.batch
+        [ Task.attempt UpdateMapWindowPosition <| getElement "mapWindow"
+        , Random.generate SetInitialSeed Random.independentSeed
+        ]
+    )
 
 
 defaultModel =
@@ -384,6 +435,9 @@ defaultModel =
             |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400)
     , topPos = 0
     , radius = 0.1
+    , destinations = Dict.empty
+    , currentDestination = Id.fromString ""
+    , seed = Random.initialSeed 0
     }
 
 
