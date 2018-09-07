@@ -45,6 +45,7 @@ type alias Model =
     , topPos : Float
     , destinations : Dict.Dict String Destination
     , currentDestination : Id
+    , editedDestination : Maybe Id
     , seed : Random.Seed
     , menuExpanded : Bool
     }
@@ -88,6 +89,8 @@ type Msg
     | ExpandMenu
     | AddDestination
     | ChangeDestination Id.Id
+    | EditName Id.Id
+    | DeleteDestination Id.Id
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -195,6 +198,12 @@ update msgArg model =
 
         ChangeDestination id ->
             ( { model | currentDestination = id } |> refreshTargetMarker, Cmd.none )
+
+        EditName id ->
+            ( { model | editedDestination = Just id }, Cmd.none )
+
+        DeleteDestination id ->
+            ( { model | destinations = Dict.remove (Id.toString id) model.destinations }, Cmd.none )
 
 
 updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -402,7 +411,7 @@ viewHeader model =
             getDest model
 
         icon =
-            Html.i [ Html.Attributes.classList [ ( "fas", True ), ( "fa-bars", True ) ] ] [] |> Element.html
+            iconHelper "fa-bars"
     in
     Element.row
         [ Element.width Element.fill
@@ -416,14 +425,29 @@ viewHeader model =
         ]
 
 
+iconHelper iconName =
+    Html.i [ Html.Attributes.classList [ ( "fas", True ), ( iconName, True ) ] ] [] |> Element.html
+
+
 viewMenu model =
     let
         destinations =
             Dict.toList model.destinations
-                |> List.map (\( k, v ) -> Element.row [ Events.onClick (ChangeDestination <| Id.fromString k) ] [ Element.text v.name ])
+                |> List.map
+                    (\( k, v ) ->
+                        Element.row [ Events.onClick (ChangeDestination <| Id.fromString k), Element.width fill, Element.spacing 30 ]
+                            [ Element.text v.name
+                            , Element.el [ Element.alignLeft, Events.onClick <| EditName <| Id.fromString k ] <| iconHelper "fa-pen"
+                            , if Dict.size model.destinations > 1 then
+                                Element.el [ Element.alignRight, Events.onClick <| DeleteDestination <| Id.fromString k ] <| iconHelper "fa-trash"
+
+                              else
+                                Element.text ""
+                            ]
+                    )
 
         addButton =
-            Element.row [ Element.width Element.fill, Events.onClick AddDestination ] [ Element.text "Add destination" ]
+            Element.row [ Element.width Element.fill, Events.onClick AddDestination, Font.italic, Font.underline ] [ Element.text "Add destination" ]
     in
     Element.row
         [ Element.height Element.fill
@@ -548,6 +572,7 @@ defaultModel =
     , currentDestination = Id.fromString ""
     , seed = Random.initialSeed 0
     , menuExpanded = False
+    , editedDestination = Nothing
     }
 
 
