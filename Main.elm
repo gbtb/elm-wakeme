@@ -86,6 +86,8 @@ type Msg
     | EnableTarget Bool
     | SetInitialSeed Random.Seed
     | ExpandMenu
+    | AddDestination
+    | ChangeDestination Id.Id
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -187,6 +189,12 @@ update msgArg model =
 
         ExpandMenu ->
             ( { model | menuExpanded = not model.menuExpanded }, Cmd.none )
+
+        AddDestination ->
+            ( createDestination model |> refreshTargetMarker, Cmd.none )
+
+        ChangeDestination id ->
+            ( { model | currentDestination = id } |> refreshTargetMarker, Cmd.none )
 
 
 updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -411,10 +419,11 @@ viewHeader model =
 viewMenu model =
     let
         destinations =
-            Dict.values model.destinations |> List.map (\s -> Element.row [] [ Element.text s.name ])
+            Dict.toList model.destinations
+                |> List.map (\( k, v ) -> Element.row [ Events.onClick (ChangeDestination <| Id.fromString k) ] [ Element.text v.name ])
 
         addButton =
-            Element.row [ Element.width Element.fill ] [ Element.text "Add destination" ]
+            Element.row [ Element.width Element.fill, Events.onClick AddDestination ] [ Element.text "Add destination" ]
     in
     Element.row
         [ Element.height Element.fill
@@ -428,7 +437,7 @@ viewMenu model =
             , Element.paddingXY 10 20
             ]
             (addButton :: destinations)
-        , Element.column [ Element.width <| Element.fillPortion 1 ] []
+        , Element.column [ Element.width <| Element.fillPortion 1, Events.onClick ExpandMenu, Element.height fill ] []
         ]
 
 
