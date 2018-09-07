@@ -311,32 +311,44 @@ refreshTargetMarker model =
 
 view : Model -> { title : String, body : List (Html Msg) }
 view model =
+    let
+        attrs =
+            if model.menuExpanded then
+                [ Element.inFront (viewMenu model) ]
+
+            else
+                []
+    in
     { title = "Wakeme"
     , body =
         [ Element.layout [] <|
-            Element.column
-                [ Element.width
-                    (fill
-                        |> maximum 500
-                    )
-                , Element.paddingXY 10 0
-                , Element.spacing 20
-                ]
+            Element.column []
                 [ viewHeader model
-                , viewCheckbox model
-                , Element.text <| "distance: " ++ Round.round 0 model.distance ++ " m"
-                , viewRadiusSlider model
-                , viewAudio
-                , Element.el
-                    [ Element.htmlAttribute <| onClick ClickOnMap
-                    , Element.htmlAttribute (id "mapWindow")
-                    , Element.htmlAttribute <| onTouch ClickOnMap
-                    , Element.htmlAttribute (id "mapWindow")
+                , Element.column
+                    ([ Element.width
+                        (fill
+                            |> maximum 500
+                        )
+                     , Element.paddingXY 10 20
+                     , Element.spacing 20
+                     ]
+                        ++ attrs
+                    )
+                    [ viewCheckbox model
+                    , Element.text <| "distance: " ++ Round.round 0 model.distance ++ " m"
+                    , viewRadiusSlider model
+                    , viewAudio
+                    , Element.el
+                        [ Element.htmlAttribute <| onClick ClickOnMap
+                        , Element.htmlAttribute (id "mapWindow")
+                        , Element.htmlAttribute <| onTouch ClickOnMap
+                        , Element.htmlAttribute (id "mapWindow")
+                        ]
+                      <|
+                        Element.html <|
+                            Html.map MapsMsg <|
+                                Maps.view model.map
                     ]
-                  <|
-                    Element.html <|
-                        Html.map MapsMsg <|
-                            Maps.view model.map
                 ]
         ]
     }
@@ -352,7 +364,7 @@ scale x =
 
 colors =
     { aqua = Element.rgba255 97 201 168 1.0
-    , papaya = Element.rgba255 255 238 219 0.5
+    , papaya = Element.rgba255 255 238 219 0.9
     , silver = Element.rgba255 173 168 182 0.9
     , purple = Element.rgba255 76 59 77 0.9
     , maroon = Element.rgba255 165 56 96 0.9
@@ -388,11 +400,35 @@ viewHeader model =
         [ Element.width Element.fill
         , Background.color colors.papaya
         , Border.shadow { size = 0, offset = ( 0, 4 ), blur = 4, color = colors.silver }
-        , Element.paddingXY 10 10
+        , Element.paddingXY 10 20
         , Font.size (scale 2)
         ]
         [ Element.el [ Element.alignLeft, Events.onClick ExpandMenu ] icon
         , Element.el [ Element.centerX, Element.centerY ] <| Element.text destination.name
+        ]
+
+
+viewMenu model =
+    let
+        destinations =
+            Dict.values model.destinations |> List.map (\s -> Element.row [] [ Element.text s.name ])
+
+        addButton =
+            Element.row [ Element.width Element.fill ] [ Element.text "Add destination" ]
+    in
+    Element.row
+        [ Element.height Element.fill
+        , Element.width Element.fill
+        ]
+        [ Element.column
+            [ Background.color colors.papaya
+            , Element.width <| Element.fillPortion 8
+            , Element.height Element.fill
+            , Element.spacingXY 0 20
+            , Element.paddingXY 10 20
+            ]
+            (addButton :: destinations)
+        , Element.column [ Element.width <| Element.fillPortion 1 ] []
         ]
 
 
