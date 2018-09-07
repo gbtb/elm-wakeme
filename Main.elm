@@ -8,6 +8,8 @@ import Dict
 import Element exposing (fill, maximum)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
+import Element.Font as Font
 import Element.Input as Input
 import Geolocation exposing (..)
 import GeolocationDecoders exposing (locationDecoder)
@@ -44,6 +46,7 @@ type alias Model =
     , destinations : Dict.Dict String Destination
     , currentDestination : Id
     , seed : Random.Seed
+    , menuExpanded : Bool
     }
 
 
@@ -82,6 +85,7 @@ type Msg
     | PortMsg IncomingMsg
     | EnableTarget Bool
     | SetInitialSeed Random.Seed
+    | ExpandMenu
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -180,6 +184,9 @@ update msgArg model =
                         Cmd.none
             in
             ( { model | enabled = b }, cmd )
+
+        ExpandMenu ->
+            ( { model | menuExpanded = not model.menuExpanded }, Cmd.none )
 
 
 updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -306,16 +313,17 @@ view : Model -> { title : String, body : List (Html Msg) }
 view model =
     { title = "Wakeme"
     , body =
-        [ Element.layout [ Background.color colors.papaya ] <|
+        [ Element.layout [] <|
             Element.column
                 [ Element.width
                     (fill
-                        |> maximum 300
+                        |> maximum 500
                     )
-                , Element.padding 10
+                , Element.paddingXY 10 0
                 , Element.spacing 20
                 ]
-                [ viewCheckbox model
+                [ viewHeader model
+                , viewCheckbox model
                 , Element.text <| "distance: " ++ Round.round 0 model.distance ++ " m"
                 , viewRadiusSlider model
                 , viewAudio
@@ -336,6 +344,10 @@ view model =
 
 positionMarker =
     Html.text "➘"
+
+
+scale x =
+    16 * (1 + 1.25 * (x - 1)) |> round
 
 
 colors =
@@ -362,6 +374,26 @@ viewRadiusSlider model =
         , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat radius ++ " km"
         , onChange = RadiusChange
         }
+
+
+viewHeader model =
+    let
+        destination =
+            getDest model
+
+        icon =
+            Html.i [ Html.Attributes.classList [ ( "fas", True ), ( "fa-bars", True ) ] ] [] |> Element.html
+    in
+    Element.row
+        [ Element.width Element.fill
+        , Background.color colors.papaya
+        , Border.shadow { size = 0, offset = ( 0, 4 ), blur = 4, color = colors.silver }
+        , Element.paddingXY 10 10
+        , Font.size (scale 2)
+        ]
+        [ Element.el [ Element.alignLeft, Events.onClick ExpandMenu ] icon
+        , Element.el [ Element.centerX, Element.centerY ] <| Element.text destination.name
+        ]
 
 
 px =
@@ -470,6 +502,7 @@ defaultModel =
     , destinations = Dict.empty
     , currentDestination = Id.fromString ""
     , seed = Random.initialSeed 0
+    , menuExpanded = False
     }
 
 
