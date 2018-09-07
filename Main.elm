@@ -145,19 +145,30 @@ update msgArg model =
                 markerPos =
                     Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
 
+                map =
+                    Maps.Convert.getMap model.map
+
+                metersPerPx =
+                    pixelLength map.center.lat map.zoom
+
                 marker =
-                    targetMarker model
+                    targetMarker (model |> getDest) metersPerPx
             in
             ( { model
                 | map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
-                , desiredLocation = markerPos
               }
+                |> updateDest (Maybe.map (\dest -> { dest | desiredLocation = markerPos }))
             , Cmd.none
             )
                 |> updateDistance
 
         RadiusChange r ->
-            ( { model | radius = r } |> refreshTargetMarker, Cmd.none ) |> updateDistance
+            ( model
+                |> updateDest (Maybe.map (\dest -> { dest | radius = r }))
+                |> refreshTargetMarker
+            , Cmd.none
+            )
+                |> updateDistance
 
         EnableTarget b ->
             let
@@ -184,17 +195,18 @@ createDestination model =
     let
         ( id, nextSeed ) =
             Random.step Id.generator model.seed
-
-        dest =
-            { desiredLocation = latLng 0 0
-            , radius = 0.2
-            , name = "Destination " ++ String.fromInt (Dict.size model.destinations + 1)
-            }
     in
     { model
         | seed = nextSeed
-        , destinations = Dict.insert (Id.toString id) dest model.destinations
+        , destinations = Dict.insert (Id.toString id) (defaultDest model) model.destinations
         , currentDestination = id
+    }
+
+
+defaultDest model =
+    { desiredLocation = latLng 0 0
+    , radius = 0.2
+    , name = "Destination " ++ String.fromInt (Dict.size model.destinations + 1)
     }
 
 
@@ -231,11 +243,14 @@ updateOnPortMsg msg model =
 
 updateDistance ( model, cmd ) =
     let
+        destination =
+            getDest model
+
         distance =
-            haversine (locationToLatLng model.currentLocation) model.desiredLocation
+            haversine (locationToLatLng model.currentLocation) destination.desiredLocation
 
         dist =
-            distance <= model.radius * 1000
+            distance <= destination.radius * 1000
 
         playCmd =
             if dist && model.enabled && not model.alarmRunning then
@@ -258,10 +273,31 @@ updateMarker idx marker markers =
         |> Array.toList
 
 
+getDest model =
+    Dict.get (Id.toString model.currentDestination) model.destinations |> Maybe.withDefault (defaultDest model)
+
+
+updateDest updater model =
+    let
+        destinations =
+            Dict.update (Id.toString model.currentDestination) updater model.destinations
+    in
+    { model | destinations = destinations }
+
+
 refreshTargetMarker model =
     let
+        dest =
+            getDest model
+
+        map =
+            Maps.Convert.getMap model.map
+
+        metersPerPx =
+            pixelLength map.center.lat map.zoom
+
         updatedMap =
-            model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker model) model.desiredLocation))
+            model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom (targetMarker dest metersPerPx) dest.desiredLocation))
     in
     { model | map = updatedMap }
 
@@ -313,13 +349,17 @@ colors =
 
 
 viewRadiusSlider model =
+    let
+        radius =
+            Dict.get (Id.toString model.currentDestination) model.destinations |> Maybe.map .radius |> Maybe.withDefault 0.2
+    in
     Input.slider [ Background.color colors.aqua ]
         { min = 0.1
         , max = 2
         , thumb = Input.defaultThumb
-        , value = model.radius
+        , value = radius
         , step = Just 0.1
-        , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat model.radius ++ " km"
+        , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat radius ++ " km"
         , onChange = RadiusChange
         }
 
@@ -364,14 +404,8 @@ viewCheckbox model =
         }
 
 
-targetMarker model =
+targetMarker model metersPerPx =
     let
-        map =
-            Maps.Convert.getMap model.map
-
-        metersPerPx =
-            pixelLength map.center.lat map.zoom
-
         radius =
             model.radius * 1000 / metersPerPx |> round
 
@@ -425,7 +459,6 @@ defaultModel =
             Maps.Marker.createCustom (Html.text "") <| Maps.Geo.latLng 0 0
     in
     { currentLocation = defaultLocation
-    , desiredLocation = latLng 0 0
     , distance = 0
     , alarmRunning = False
     , enabled = False
@@ -434,7 +467,6 @@ defaultModel =
             |> Maps.updateMarkers (\_ -> List.repeat 2 dummyMarker)
             |> Maps.updateMap (Maps.Map.setWidth 500 >> Maps.Map.setHeight 400)
     , topPos = 0
-    , radius = 0.1
     , destinations = Dict.empty
     , currentDestination = Id.fromString ""
     , seed = Random.initialSeed 0
