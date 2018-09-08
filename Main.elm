@@ -8,7 +8,6 @@ import Dict
 import Element exposing (fill, maximum)
 import Element.Background as Background
 import Element.Border as Border
-import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Geolocation exposing (..)
@@ -86,11 +85,13 @@ type Msg
     | PortMsg IncomingMsg
     | EnableTarget Bool
     | SetInitialSeed Random.Seed
-    | ExpandMenu
-    | AddDestination
-    | ChangeDestination Id.Id
-    | EditName Id.Id
-    | DeleteDestination Id.Id
+    | ExpandMenu Mouse.Event
+    | AddDestination Mouse.Event
+    | ChangeDestination Id.Id Mouse.Event
+    | EditName Id.Id Mouse.Event
+    | DeleteDestination Id.Id Mouse.Event
+    | NameChanged String
+    | FinishEdit Mouse.Event
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -190,20 +191,40 @@ update msgArg model =
             in
             ( { model | enabled = b }, cmd )
 
-        ExpandMenu ->
+        ExpandMenu _ ->
             ( { model | menuExpanded = not model.menuExpanded }, Cmd.none )
 
-        AddDestination ->
+        AddDestination _ ->
             ( createDestination model |> refreshTargetMarker, Cmd.none )
 
-        ChangeDestination id ->
+        ChangeDestination id _ ->
             ( { model | currentDestination = id } |> refreshTargetMarker, Cmd.none )
 
-        EditName id ->
+        EditName id _ ->
             ( { model | editedDestination = Just id }, Cmd.none )
 
-        DeleteDestination id ->
-            ( { model | destinations = Dict.remove (Id.toString id) model.destinations }, Cmd.none )
+        FinishEdit _ ->
+            ( { model | editedDestination = Nothing }, Cmd.none )
+
+        NameChanged str ->
+            ( model |> updateEditedDest (Maybe.map (\d -> { d | name = str })), Cmd.none )
+
+        DeleteDestination id _ ->
+            let
+                newDestinations =
+                    Dict.remove (Id.toString id) model.destinations
+            in
+            ( { model
+                | destinations = newDestinations
+                , currentDestination =
+                    if model.currentDestination == id then
+                        Dict.keys newDestinations |> List.head |> Maybe.withDefault "" |> Id.fromString
+
+                    else
+                        model.currentDestination
+              }
+            , Cmd.none
+            )
 
 
 updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -309,6 +330,19 @@ updateDest updater model =
     { model | destinations = destinations }
 
 
+updateEditedDest updater model =
+    case model.editedDestination of
+        Just id ->
+            let
+                destinations =
+                    Dict.update (Id.toString id) updater model.destinations
+            in
+            { model | destinations = destinations }
+
+        Nothing ->
+            model
+
+
 refreshTargetMarker model =
     let
         dest =
@@ -381,7 +415,7 @@ scale x =
 
 colors =
     { aqua = Element.rgba255 97 201 168 1.0
-    , papaya = Element.rgba255 255 238 219 0.9
+    , papaya = Element.rgba255 255 238 219 1
     , silver = Element.rgba255 173 168 182 0.9
     , purple = Element.rgba255 76 59 77 0.9
     , maroon = Element.rgba255 165 56 96 0.9
@@ -394,15 +428,19 @@ viewRadiusSlider model =
         radius =
             Dict.get (Id.toString model.currentDestination) model.destinations |> Maybe.map .radius |> Maybe.withDefault 0.2
     in
-    Input.slider [ Background.color colors.aqua ]
-        { min = 0.1
-        , max = 2
-        , thumb = Input.defaultThumb
-        , value = radius
-        , step = Just 0.1
-        , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat radius ++ " km"
-        , onChange = RadiusChange
-        }
+    if model.menuExpanded then
+        Element.text "Radius"
+
+    else
+        Input.slider [ Background.color colors.aqua, Element.htmlAttribute <| Html.Attributes.style "z-index" "-1000" ]
+            { min = 0.1
+            , max = 2
+            , thumb = Input.defaultThumb
+            , value = radius
+            , step = Just 0.1
+            , label = Input.labelLeft [] <| Element.text <| "Radius, " ++ String.fromFloat radius ++ " km"
+            , onChange = RadiusChange
+            }
 
 
 viewHeader model =
@@ -420,7 +458,7 @@ viewHeader model =
         , Element.paddingXY 10 20
         , Font.size (scale 2)
         ]
-        [ Element.el [ Element.alignLeft, Events.onClick ExpandMenu ] icon
+        [ Element.el [ Element.alignLeft, mouseOnClick ExpandMenu ] icon
         , Element.el [ Element.centerX, Element.centerY ] <| Element.text destination.name
         ]
 
@@ -435,11 +473,23 @@ viewMenu model =
             Dict.toList model.destinations
                 |> List.map
                     (\( k, v ) ->
-                        Element.row [ Events.onClick (ChangeDestination <| Id.fromString k), Element.width fill, Element.spacing 30 ]
-                            [ Element.text v.name
-                            , Element.el [ Element.alignLeft, Events.onClick <| EditName <| Id.fromString k ] <| iconHelper "fa-pen"
+                        let
+                            currentlyEdited =
+                                model.editedDestination |> Maybe.map Id.toString |> Maybe.withDefault ""
+                        in
+                        Element.row [ mouseOnClick (ChangeDestination <| Id.fromString k), Element.width fill, Element.spacing 30 ]
+                            [ if currentlyEdited /= k then
+                                Element.text v.name
+
+                              else
+                                Input.text [] { onChange = NameChanged, text = v.name, placeholder = Nothing, label = Input.labelRight [] <| Element.text "" }
+                            , if currentlyEdited /= k then
+                                Element.el [ Element.alignLeft, mouseOnClick <| EditName <| Id.fromString k ] <| iconHelper "fa-pen"
+
+                              else
+                                Element.el [ Element.alignLeft, mouseOnClick <| FinishEdit ] <| iconHelper "fa-check"
                             , if Dict.size model.destinations > 1 then
-                                Element.el [ Element.alignRight, Events.onClick <| DeleteDestination <| Id.fromString k ] <| iconHelper "fa-trash"
+                                Element.el [ Element.alignRight, mouseOnClick <| DeleteDestination <| Id.fromString k ] <| iconHelper "fa-trash"
 
                               else
                                 Element.text ""
@@ -447,7 +497,7 @@ viewMenu model =
                     )
 
         addButton =
-            Element.row [ Element.width Element.fill, Events.onClick AddDestination, Font.italic, Font.underline ] [ Element.text "Add destination" ]
+            Element.row [ Element.width Element.fill, mouseOnClick AddDestination, Font.italic, Font.underline ] [ Element.text "Add destination" ]
     in
     Element.row
         [ Element.height Element.fill
@@ -461,8 +511,12 @@ viewMenu model =
             , Element.paddingXY 10 20
             ]
             (addButton :: destinations)
-        , Element.column [ Element.width <| Element.fillPortion 1, Events.onClick ExpandMenu, Element.height fill ] []
+        , Element.column [ Element.width <| Element.fillPortion 1, mouseOnClick ExpandMenu, Element.height fill ] []
         ]
+
+
+mouseOnClick x =
+    Element.htmlAttribute <| Mouse.onClick x
 
 
 px =
