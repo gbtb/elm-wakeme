@@ -1,4 +1,4 @@
-module Main exposing (Data, Model, Msg(..), defaultLocation, defaultModel, getCurrentPosition, init, isDifferentFrom, main, onClick, onTouch, pixelLength, positionMarker, refreshTargetMarker, subscriptions, targetMarker, update, updateMarker, view, viewAudio, viewRadiusSlider, viewTup)
+module Main exposing (Data, Model, Msg(..), defaultLocation, defaultModel, getCurrentPosition, init, isDifferentFrom, main, onClick, onTouch, pixelLength, positionMarker, refreshTargetMarker, subscriptions, targetMarker, update, updateMarker, view, viewAudio, viewRadiusSlider)
 
 import Array
 import Browser
@@ -588,10 +588,6 @@ onClick =
 onTouch =
     { stopPropagation = False, preventDefault = True }
         |> Mouse.onWithOptions "touchend"
-
-
-viewTup ( a, b ) =
-    Debug.toString a ++ ":" ++ Debug.toString b ++ "\n"
 
 
 subscriptions : Model -> Sub Msg
