@@ -1,5 +1,5 @@
 // Inside of webpack.config.js:
-const WorkboxPlugin = require('workbox-webpack-plugin');
+const {InjectManifest} = require('workbox-webpack-plugin');
 const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const CompressionPlugin = require('compression-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
@@ -48,11 +48,17 @@ module.exports = {
     }]
   },
   plugins: [
-    new WorkboxPlugin.GenerateSW(),
+    new InjectManifest({
+        swSrc: "./sw.js"
+    }),
     new CompressionPlugin(),
     new CopyWebpackPlugin([{
         from: './*.html'
-      }])
+      },
+      {
+        from: './*.mp3'
+      }
+    ])
   ],
   optimization: {
     minimizer: [
