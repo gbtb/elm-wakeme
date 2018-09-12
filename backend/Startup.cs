@@ -43,7 +43,7 @@ namespace backend
         {
             app.UseStaticFiles(); // For the wwwroot folder
 
-            var path = Path.Combine(Directory.GetCurrentDirectory(), "");
+            var path = Path.Combine(Directory.GetCurrentDirectory(), "dist");
             Console.WriteLine(path);
             app.UseFileServer(new FileServerOptions
             {

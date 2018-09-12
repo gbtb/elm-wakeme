@@ -1,6 +1,8 @@
 // Inside of webpack.config.js:
 const WorkboxPlugin = require('workbox-webpack-plugin');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin')
+const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const CompressionPlugin = require('compression-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 // Enable users to turn on dead code elimination.
 const deadCodeElimination =
@@ -30,7 +32,7 @@ const deadCodeElimination =
 module.exports = {
   // Other webpack config...
   mode: "production",
-  entry: "./Main.elm",
+  entry: "./index.js",
   module: {
     rules: [{
       test: /\.elm$/,
@@ -46,47 +48,51 @@ module.exports = {
     }]
   },
   plugins: [
-    new WorkboxPlugin.GenerateSW()
+    new WorkboxPlugin.GenerateSW(),
+    new CompressionPlugin(),
+    new CopyWebpackPlugin([{
+        from: './*.html'
+      }])
   ],
   optimization: {
     minimizer: [
         new UglifyJsPlugin({
-          uglifyOptions: {
-            keep_fargs: false,
-            compress: Object.assign(
-              {},
-              {
-                warnings: false,
-                comparisons: true,
-                unsafe: true,
-                unsafe_comps: true,
-                pure_getters: true
-              },
-              deadCodeElimination
-            ),
-            output: {
-              comments: false,
-              // Turned on because emoji and regex is not minified properly using default
-              // https://github.com/facebook/create-react-app/issues/2488
-              ascii_only: true
-            }
-          },
-          // Use multi-process parallel running to improve the build speed
-          // Default number of concurrent runs: os.cpus().length - 1
-          parallel: true,
-          // Enable file caching
-          sourceMap: false
-        }),
-        new UglifyJsPlugin({
             uglifyOptions: {
-                mangle: true
+              keep_fargs: false,
+              compress: Object.assign(
+                {},
+                {
+                  warnings: false,
+                  comparisons: true,
+                  unsafe: true,
+                  unsafe_comps: true,
+                  pure_getters: true
+                },
+                deadCodeElimination
+              ),
+              output: {
+                comments: false,
+                // Turned on because emoji and regex is not minified properly using default
+                // https://github.com/facebook/create-react-app/issues/2488
+                ascii_only: true
+              }
             },
             // Use multi-process parallel running to improve the build speed
             // Default number of concurrent runs: os.cpus().length - 1
             parallel: true,
             // Enable file caching
             sourceMap: false
-          })
+          }),
+          new UglifyJsPlugin({
+              uglifyOptions: {
+                  mangle: false
+              },
+              // Use multi-process parallel running to improve the build speed
+              // Default number of concurrent runs: os.cpus().length - 1
+              parallel: true,
+              // Enable file caching
+              sourceMap: false
+            })
       ],
   }
 };

@@ -5,14 +5,13 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Wakeme</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="index.js"></script>
-	<script type="text/javascript" src="//localhost:35729/livereload.js?snipver=1" async="" defer=""></script>
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
 </head>
 <body>
     <div id="elm"></div>
 </body>
-<script>
+<script src="main.js"></script>
+<!--<script>
 	// Check that service workers are registered
 	if ('serviceWorker' in navigator) {
 	  // Use the window load event to keep the page load performant
@@ -28,105 +27,5 @@
 	} else {
 	console.log(`Boo! Workbox didn't load 😬`);
 	}
-	</script>
-<script>
-var id, target, options, notification;
-
-var app = Elm.Main.init({
-  node: document.getElementById('elm')
-});
-
-function success(rawPosition) {
-    var coords = rawPosition.coords;
-
-	var rawAltitude = coords.altitude;
-	var rawAccuracy = coords.altitudeAccuracy;
-	var altitude =
-		(rawAltitude === null || rawAccuracy === null)
-			? null
-			: { value: rawAltitude, accuracy: rawAccuracy };
-
-	var heading = coords.heading;
-	var speed = coords.speed;
-	var movement =
-		(heading === null || speed === null)
-			? null
-			: 
-				speed === 0
-					? { Static: null }
-					: { Moving: {speed: speed, degreesFromNorth: heading } }
-			
-
-	const ret = {
-		latitude: coords.latitude,
-		longitude: coords.longitude,
-	    accuracy: coords.accuracy,
-		altitude: altitude,
-		movement: movement,
-		timestamp: rawPosition.timestamp
-	};
-	
-	app.ports.incomingPort.send({LocationUpdate: ret});
-}
-
-app.ports.outgoingPort.subscribe(function(value){
-	console.log(value);
-	if (value.hasOwnProperty('GetCurrentPosition'))
-		navigator.geolocation.getCurrentPosition(success, error, options);
-
-	if (value.hasOwnProperty('StartAlarm'))
-		playAlarm();
-
-	if (value.hasOwnProperty('StopAlarm'))
-		stopAlarm();
-	
-});
-
-function error(err) {
-  console.warn('ERROR(' + err.code + '): ' + err.message);
-  app.ports.incomingPort.send({LocationUpdateError: err.message});
-}
-
-function playAlarm(){
-	const alarm = document.getElementById("alarm");
-	alarm.play();
-
-	if(Notification.permission === 'default'){
-		Notification.requestPermission()
-		.then(
-			showNotification
-		)
-	}else if (Notification.permission === 'granted'){
-		showNotification('granted')
-	}
-}
-
-function showNotification(permission){
-	if(permission !== 'granted')
-		return;
-
-	notification = new Notification("Proximity alert!", {
-		requireInteraction: true
-	});
-
-	notification.onclick = () => stopAlarm();
-	notification.onclose = () => stopAlarm();
-	notification.onerror = () => stopAlarm();
-}
-
-function stopAlarm(){
-	const alarm = document.getElementById("alarm");
-	alarm.pause();
-	notification.close();
-	app.ports.incomingPort.send({AlarmWasStopped: null});
-}
-
-options = {
-  enableHighAccuracy: false,
-  timeout: 5000,
-  maximumAge: 0
-};
-
-id = navigator.geolocation.watchPosition(success, error, options);
-</script>
+</script>!-->
 </html>
