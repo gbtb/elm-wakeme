@@ -76,7 +76,7 @@ const  minimizer = mode !== 'production' ? [] : [
 module.exports = {
   // Other webpack config...
   mode: mode,
-  entry: ["./alarm.mp3", "./index.html", "./Main.elm"],
+  entry: ["./alarm.mp3", "./index.html", "./index.js"],
   module: {
     rules: [
         {
@@ -109,7 +109,7 @@ module.exports = {
     new GenerateSW({
         swDest: "./sw.js",
         runtimeCaching: [{
-            urlPattern: new RegExp('^/https://a.tile.osm.org/'),
+            urlPattern: new RegExp('^http.*'),
             handler: 'cacheFirst',
             options: {
                 cacheableResponse: {
