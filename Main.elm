@@ -11,7 +11,6 @@ import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Geolocation exposing (..)
-import GeolocationDecoders exposing (locationDecoder)
 import Html exposing (..)
 import Html.Attributes exposing (id)
 import Html.Events
@@ -19,6 +18,7 @@ import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Id exposing (Id)
 import Json.Decode as JD
+import Json.Encode as JE
 import Maps
 import Maps.Convert
 import Maps.Geo exposing (LatLng, latLng)
@@ -52,13 +52,6 @@ type alias Model =
 
 type alias Db =
     Dict.Dict String Destination
-
-
-type alias Destination =
-    { desiredLocation : LatLng
-    , radius : Float
-    , name : String
-    }
 
 
 main : Program () Model Msg
@@ -171,6 +164,7 @@ update msgArg model =
             , Cmd.none
             )
                 |> updateDistance
+                |> saveData
 
         RadiusChange r ->
             ( model
@@ -179,6 +173,7 @@ update msgArg model =
             , Cmd.none
             )
                 |> updateDistance
+                |> saveData
 
         EnableTarget b ->
             let
@@ -195,7 +190,7 @@ update msgArg model =
             ( { model | menuExpanded = not model.menuExpanded }, Cmd.none )
 
         AddDestination _ ->
-            ( createDestination model |> refreshTargetMarker, Cmd.none )
+            ( createDestination model |> refreshTargetMarker, Cmd.none ) |> saveData
 
         ChangeDestination id _ ->
             ( { model | currentDestination = id } |> refreshTargetMarker, Cmd.none )
@@ -204,7 +199,7 @@ update msgArg model =
             ( { model | editedDestination = Just id }, Cmd.none )
 
         FinishEdit _ ->
-            ( { model | editedDestination = Nothing }, Cmd.none )
+            ( { model | editedDestination = Nothing }, Cmd.none ) |> saveData
 
         NameChanged str ->
             ( model |> updateEditedDest (Maybe.map (\d -> { d | name = str })), Cmd.none )
@@ -225,6 +220,7 @@ update msgArg model =
               }
             , Cmd.none
             )
+                |> saveData
 
 
 updateInitialDestination : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -282,8 +278,24 @@ updateOnPortMsg msg model =
         AlarmWasStopped ->
             ( { model | alarmRunning = False }, Cmd.none )
 
-        _ ->
+        ReceiveData _ data ->
+            JD.decodeValue dataDecoder data
+                |> Result.map (\rData -> { model | destinations = rData })
+                |> Result.mapError (\e -> Debug.log "e" e)
+                |> Result.withDefault model
+                |> (\x -> ( x, Cmd.none ))
+                |> setCurrentDestination
+
+        LocationUpdateError _ ->
             ( model, Cmd.none )
+
+
+setCurrentDestination ( model, cmd ) =
+    let
+        id =
+            model.destinations |> Dict.keys |> List.head |> Maybe.map Id.fromString |> Maybe.withDefault model.currentDestination
+    in
+    ( { model | currentDestination = id } |> refreshTargetMarker, cmd )
 
 
 updateDistance ( model, cmd ) =
@@ -600,6 +612,7 @@ init _ =
     , Cmd.batch
         [ Task.attempt UpdateMapWindowPosition <| getElement "mapWindow"
         , Random.generate SetInitialSeed Random.independentSeed
+        , getData
         ]
     )
 
@@ -651,7 +664,10 @@ isDifferentFrom threshold oldLocation newLocation =
 
 
 processIncomingMsg value =
-    JD.decodeValue incomingMsgDecoder value |> Result.map PortMsg |> Result.withDefault NoOp
+    JD.decodeValue incomingMsgDecoder value
+        |> Result.map PortMsg
+        |> Result.mapError (\e -> Debug.log "msg" e)
+        |> Result.withDefault NoOp
 
 
 locationToLatLng loc =
@@ -698,3 +714,24 @@ playAlarm =
 
 stopAlarm =
     outgoingPort <| outgoingMsgEncoder StopAlarm
+
+
+getData =
+    outgoingPort <| outgoingMsgEncoder (GetData "destinations")
+
+
+saveData ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , outgoingPort <| outgoingMsgEncoder (SaveData "destinations" <| dataEncoder model)
+        ]
+    )
+
+
+dataEncoder model =
+    model.destinations |> JE.dict identity destinationEncoder
+
+
+dataDecoder =
+    JD.dict destinationDecoder

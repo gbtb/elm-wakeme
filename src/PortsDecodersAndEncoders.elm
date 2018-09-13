@@ -1,10 +1,10 @@
-module PortsDecodersAndEncoders exposing (..)
+module PortsDecodersAndEncoders exposing (altitudeDecoder, altitudeEncoder, destinationDecoder, destinationEncoder, incomingMsgDecoder, incomingMsgEncoder, locationDecoder, locationEncoder, maybeDecoder, maybeEncoder, movementDecoder, movementEncoder, movingDataDecoder, movingDataEncoder, outgoingMsgDecoder, outgoingMsgEncoder)
 
-import Geolocation exposing (Altitude, Location, Movement(..), MovingData, posixDecoder, posixEncoder)
+import Geolocation exposing (Altitude, Destination, Location, Movement(..), MovingData, decodeLatLng, encodeLatLng, posixDecoder, posixEncoder)
 import Json.Decode as JD
 import Json.Decode.Pipeline as JD
 import Json.Encode as JE
-import Ports exposing (IncomingMsg(..), OutgoingMsg(..))
+import Ports exposing (IncomingMsg(..), OutgoingMsg(..), valueDecoder, valueEncoder)
 
 
 altitudeDecoder : JD.Decoder Altitude
@@ -14,12 +14,21 @@ altitudeDecoder =
         |> JD.required "accuracy" JD.float
 
 
+destinationDecoder : JD.Decoder Destination
+destinationDecoder =
+    JD.succeed Destination
+        |> JD.required "desiredLocation" decodeLatLng
+        |> JD.required "radius" JD.float
+        |> JD.required "name" JD.string
+
+
 incomingMsgDecoder : JD.Decoder IncomingMsg
 incomingMsgDecoder =
     JD.oneOf
         [ JD.field "LocationUpdate" (JD.map LocationUpdate locationDecoder)
         , JD.field "LocationUpdateError" (JD.map LocationUpdateError JD.string)
         , JD.field "AlarmWasStopped" (JD.succeed AlarmWasStopped)
+        , JD.field "ReceiveData" (JD.map2 ReceiveData (JD.index 0 JD.string) (JD.index 1 valueDecoder))
         ]
 
 
@@ -62,6 +71,8 @@ outgoingMsgDecoder =
         [ JD.field "GetCurrentPosition" (JD.succeed GetCurrentPosition)
         , JD.field "StartAlarm" (JD.succeed StartAlarm)
         , JD.field "StopAlarm" (JD.succeed StopAlarm)
+        , JD.field "SaveData" (JD.map2 SaveData (JD.index 0 JD.string) (JD.index 1 valueDecoder))
+        , JD.field "GetData" (JD.map GetData JD.string)
         ]
 
 
@@ -70,6 +81,15 @@ altitudeEncoder value =
     JE.object
         [ ( "value", JE.float value.value )
         , ( "accuracy", JE.float value.accuracy )
+        ]
+
+
+destinationEncoder : Destination -> JE.Value
+destinationEncoder value =
+    JE.object
+        [ ( "desiredLocation", encodeLatLng value.desiredLocation )
+        , ( "radius", JE.float value.radius )
+        , ( "name", JE.string value.name )
         ]
 
 
@@ -84,6 +104,9 @@ incomingMsgEncoder value =
 
         AlarmWasStopped ->
             JE.object [ ( "AlarmWasStopped", JE.null ) ]
+
+        ReceiveData v1 v2 ->
+            JE.object [ ( "ReceiveData", JE.list identity [ JE.string v1, valueEncoder v2 ] ) ]
 
 
 locationEncoder : Location -> JE.Value
@@ -136,3 +159,9 @@ outgoingMsgEncoder value =
 
         StopAlarm ->
             JE.object [ ( "StopAlarm", JE.null ) ]
+
+        SaveData v1 v2 ->
+            JE.object [ ( "SaveData", JE.list identity [ JE.string v1, valueEncoder v2 ] ) ]
+
+        GetData v1 ->
+            JE.object [ ( "GetData", JE.string v1 ) ]

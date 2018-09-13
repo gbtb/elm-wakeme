@@ -1,8 +1,9 @@
-port module Geolocation exposing (..)
+port module Geolocation exposing (Altitude, Destination, Location, Movement(..), MovingData, decodeLatLng, encodeLatLng, posixDecoder, posixEncoder)
 
-import Time exposing (Posix)
-import Json.Encode as JE exposing (Value)
 import Json.Decode as JD
+import Json.Encode as JE exposing (Value)
+import Maps.Geo exposing (LatLng, latLng)
+import Time exposing (Posix)
 
 
 {-| All available details of the device's current location in the world.
@@ -45,13 +46,35 @@ type Movement
     | Moving MovingData
 
 
-type alias MovingData = { speed : Float, degreesFromNorth : Float }
+type alias MovingData =
+    { speed : Float, degreesFromNorth : Float }
+
 
 posixDecoder : JD.Decoder Posix
 posixDecoder =
     JD.map Time.millisToPosix JD.int
 
 
-posixEncoder : Posix -> Value
+posixEncoder : Posix -> JE.Value
 posixEncoder value =
     Time.posixToMillis value |> JE.int
+
+
+type alias Destination =
+    { desiredLocation : LatLng
+    , radius : Float
+    , name : String
+    }
+
+
+encodeLatLng : LatLng -> JE.Value
+encodeLatLng a =
+    JE.object
+        [ ( "lat", JE.float a.lat )
+        , ( "lng", JE.float a.lng )
+        ]
+
+
+decodeLatLng : JD.Decoder LatLng
+decodeLatLng =
+    JD.map2 latLng (JD.field "lat" JD.float) (JD.field "lng" JD.float)

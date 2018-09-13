@@ -6,7 +6,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 
 
-const mode = 'production';
+const mode = 'development';//'production';
 
 // Enable users to turn on dead code elimination.
 const deadCodeElimination =
@@ -86,7 +86,8 @@ module.exports = {
         loader: 'elm-webpack-loader',
         options: {
             pathToElm: 'node_modules/.bin/elm',
-            optimize: true,
+            optimize: mode === 'production',
+            debug: mode !== 'production',
             cwd: "."
         }
       }
