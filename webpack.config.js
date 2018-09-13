@@ -1,8 +1,12 @@
 // Inside of webpack.config.js:
-const {InjectManifest} = require('workbox-webpack-plugin');
+const {InjectManifest, GenerateSW} = require('workbox-webpack-plugin');
 const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const CompressionPlugin = require('compression-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+
+
+
+const mode = 'production';
 
 // Enable users to turn on dead code elimination.
 const deadCodeElimination =
@@ -29,39 +33,7 @@ const deadCodeElimination =
         ]
       };
 
-module.exports = {
-  // Other webpack config...
-  mode: "production",
-  entry: "./index.js",
-  module: {
-    rules: [{
-      test: /\.elm$/,
-      exclude: [/elm-stuff/, /node_modules/],
-      use: {
-        loader: 'elm-webpack-loader',
-        options: {
-            pathToElm: 'node_modules/.bin/elm',
-            optimize: true,
-            cwd: "."
-        }
-      }
-    }]
-  },
-  plugins: [
-    new InjectManifest({
-        swSrc: "./sw.js"
-    }),
-    new CompressionPlugin(),
-    new CopyWebpackPlugin([{
-        from: './*.html'
-      },
-      {
-        from: './*.mp3'
-      }
-    ])
-  ],
-  optimization: {
-    minimizer: [
+const  minimizer = mode !== 'production' ? [] : [
         new UglifyJsPlugin({
             uglifyOptions: {
               keep_fargs: false,
@@ -99,6 +71,62 @@ module.exports = {
               // Enable file caching
               sourceMap: false
             })
-      ],
+      ];
+
+module.exports = {
+  // Other webpack config...
+  mode: mode,
+  entry: ["./alarm.mp3", "./index.html", "./Main.elm"],
+  module: {
+    rules: [
+        {
+      test: /\.elm$/,
+      exclude: [/elm-stuff/, /node_modules/],
+      use: {
+        loader: 'elm-webpack-loader',
+        options: {
+            pathToElm: 'node_modules/.bin/elm',
+            optimize: true,
+            cwd: "."
+        }
+      }
+    },
+    {
+        test: /(\.mp3$)|(.\html)/,
+        exclude: [/elm-stuff/, /node_modules/],
+        use: [
+        { 
+            loader: 'file-loader',
+            options: {
+              name: '[name].[ext]'
+            }
+        }
+        ]
+    }
+    ]
+  },
+  plugins: [
+    new GenerateSW({
+        swDest: "./sw.js",
+        runtimeCaching: [{
+            urlPattern: new RegExp('^/https://a.tile.osm.org/'),
+            handler: 'cacheFirst',
+            options: {
+                cacheableResponse: {
+                  statuses: [0, 200, 304]
+                },
+                plugins: [{requestWillFetch: () => console.log("will-fetch")}]
+              }
+         
+        }]
+    }),
+    new CompressionPlugin(),
+    new CopyWebpackPlugin([
+    ])
+  ],
+  optimization: {
+    minimizer: minimizer
   }
 };
+
+
