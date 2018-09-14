@@ -30,3 +30,4 @@
 /home/chichi/MEGA/Wb/elm-wakeme/backend/obj/Debug/netcoreapp2.1/backend.dll
 /home/chichi/MEGA/Wb/elm-wakeme/backend/obj/Debug/netcoreapp2.1/backend.pdb
 /home/chichi/MEGA/Wb/elm-wakeme/backend/obj/Debug/netcoreapp2.1/backend.csproj.CopyComplete
+/home/chichi/MEGA/Wb/elm-wakeme/backend/bin/Debug/netcoreapp2.1/localhost.pfx
