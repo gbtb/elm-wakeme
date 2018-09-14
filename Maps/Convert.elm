@@ -20,7 +20,7 @@ module Maps.Convert exposing
 
 -}
 
-import Maps.Geoss
+import Maps.Geo
 import Maps.Internal.OpaqueTypes exposing (Model, getMapInternal)
 import Maps.Internal.Screen as Screen exposing (ZoomLevel)
 
