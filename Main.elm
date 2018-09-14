@@ -28,6 +28,7 @@ import Maps.Marker
 import Ports exposing (..)
 import PortsDecodersAndEncoders exposing (..)
 import Random
+import Result.Extra as Result
 import Round
 import Svg
 import Svg.Attributes as Svg
@@ -47,11 +48,8 @@ type alias Model =
     , editedDestination : Maybe Id
     , seed : Random.Seed
     , menuExpanded : Bool
+    , error : Maybe Error
     }
-
-
-type alias Db =
-    Dict.Dict String Destination
 
 
 main : Program () Model Msg
@@ -68,6 +66,12 @@ type alias Data =
     Maybe Maps.Map.Map
 
 
+type alias Error =
+    { text : String
+    , action : Maybe Msg
+    }
+
+
 type Msg
     = NoOp
     | MapsMsg (Maps.Msg Data)
@@ -76,6 +80,7 @@ type Msg
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
     | RadiusChange Float
     | PortMsg IncomingMsg
+    | AddError Error
     | EnableTarget Bool
     | SetInitialSeed Random.Seed
     | ExpandMenu Mouse.Event
@@ -85,6 +90,7 @@ type Msg
     | DeleteDestination Id.Id Mouse.Event
     | NameChanged String
     | FinishEdit Mouse.Event
+    | ClearErrors
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -135,7 +141,13 @@ update msgArg model =
             updateOnPortMsg msg model
 
         UpdateLocation ->
-            ( model, getCurrentPosition )
+            ( { model | error = Nothing }, getCurrentPosition )
+
+        ClearErrors ->
+            ( { model | error = Nothing }, Cmd.none )
+
+        AddError e ->
+            ( { model | error = Just e }, Cmd.none )
 
         ClickOnMap event ->
             let
@@ -184,7 +196,7 @@ update msgArg model =
                     else
                         Cmd.none
             in
-            ( { model | enabled = b }, cmd )
+            ( { model | enabled = b, alarmRunning = model.alarmRunning && b }, cmd )
 
         ExpandMenu _ ->
             ( { model | menuExpanded = not model.menuExpanded }, Cmd.none )
@@ -251,6 +263,7 @@ defaultDest model =
     }
 
 
+updateOnPortMsg : IncomingMsg -> Model -> ( Model, Cmd Msg )
 updateOnPortMsg msg model =
     case msg of
         LocationUpdate newLocation ->
@@ -286,8 +299,8 @@ updateOnPortMsg msg model =
                 |> (\x -> ( x, Cmd.none ))
                 |> setCurrentDestination
 
-        LocationUpdateError _ ->
-            ( model, Cmd.none )
+        LocationUpdateError e ->
+            ( { model | error = Just { text = e, action = Just UpdateLocation } }, Cmd.none )
 
 
 setCurrentDestination ( model, cmd ) =
@@ -397,15 +410,15 @@ view model =
                      ]
                         ++ attrs
                     )
-                    [ viewCheckbox model
-                    , Element.text <| "distance: " ++ Round.round 0 model.distance ++ " m"
+                    [ viewErrorMsg model
+                    , viewCheckbox model
+                    , Element.text <| "Distance: " ++ Round.round 0 model.distance ++ " m"
                     , viewRadiusSlider model
                     , viewAudio
                     , Element.el
                         [ Element.htmlAttribute <| onClick ClickOnMap
                         , Element.htmlAttribute (id "mapWindow")
                         , Element.htmlAttribute <| onTouch ClickOnMap
-                        , Element.htmlAttribute (id "mapWindow")
                         ]
                       <|
                         Element.html <|
@@ -432,7 +445,37 @@ colors =
     , purple = Element.rgba255 76 59 77 0.9
     , maroon = Element.rgba255 165 56 96 0.9
     , white = Element.rgba255 255 255 255 1
+    , gray = Element.rgba255 0 0 0 0.3
     }
+
+
+viewErrorMsg model =
+    case model.error of
+        Just err ->
+            let
+                label =
+                    case err.action of
+                        Just UpdateLocation ->
+                            Element.text "Update Location"
+
+                        _ ->
+                            Element.text "Ok"
+
+                onPress =
+                    case err.action of
+                        Just UpdateLocation ->
+                            UpdateLocation
+
+                        _ ->
+                            ClearErrors
+            in
+            Element.row [ Element.width Element.fill, Background.color colors.maroon, Element.padding 5, Element.spaceEvenly ]
+                [ Element.text err.text
+                , Input.button [] { onPress = Just onPress, label = label }
+                ]
+
+        Nothing ->
+            Element.none
 
 
 viewRadiusSlider model =
@@ -470,8 +513,8 @@ viewHeader model =
         , Element.paddingXY 10 20
         , Font.size (scale 2)
         ]
-        [ Element.el [ Element.alignLeft, mouseOnClick ExpandMenu ] icon
-        , Element.el [ Element.centerX, Element.centerY ] <| Element.text destination.name
+        [ Element.el [ Element.centerX, Element.centerY ] <| Element.text destination.name
+        , Element.el [ Element.alignRight, mouseOnClick ExpandMenu ] icon
         ]
 
 
@@ -504,26 +547,25 @@ viewMenu model =
                                 Element.el [ Element.alignRight, mouseOnClick <| DeleteDestination <| Id.fromString k ] <| iconHelper "fa-trash"
 
                               else
-                                Element.text ""
+                                Element.none
                             ]
                     )
 
         addButton =
             Element.row [ Element.width Element.fill, mouseOnClick AddDestination, Font.italic, Font.underline ] [ Element.text "Add destination" ]
     in
-    Element.row
+    Element.column
         [ Element.height Element.fill
         , Element.width Element.fill
         ]
         [ Element.column
             [ Background.color colors.papaya
-            , Element.width <| Element.fillPortion 8
-            , Element.height Element.fill
+            , Element.width <| Element.fill
             , Element.spacingXY 0 20
             , Element.paddingXY 10 20
             ]
             (addButton :: destinations)
-        , Element.column [ Element.width <| Element.fillPortion 1, mouseOnClick ExpandMenu, Element.height fill ] []
+        , Element.column [ Element.height <| Element.fill, mouseOnClick ExpandMenu, Element.width fill, Background.color colors.gray ] []
         ]
 
 
@@ -555,10 +597,10 @@ viewCheckbox model =
                     , Background.gradient { angle = 0, steps = [ colors.silver, colors.white, colors.silver ] }
                     ]
                 <|
-                    Element.text ""
+                    Element.none
     in
     Input.checkbox []
-        { label = Input.labelLeft [] <| Element.text ""
+        { label = Input.labelLeft [] <| Element.none
         , icon =
             \x ->
                 if x then
@@ -636,6 +678,7 @@ defaultModel =
     , seed = Random.initialSeed 0
     , menuExpanded = False
     , editedDestination = Nothing
+    , error = Nothing
     }
 
 
@@ -666,8 +709,8 @@ isDifferentFrom threshold oldLocation newLocation =
 processIncomingMsg value =
     JD.decodeValue incomingMsgDecoder value
         |> Result.map PortMsg
-        |> Result.mapError (\e -> Debug.log "msg" e)
-        |> Result.withDefault NoOp
+        |> Result.mapError (\e -> Debug.log "incoming port error" <| AddError { text = JD.errorToString e, action = Nothing })
+        |> Result.merge
 
 
 locationToLatLng loc =
@@ -722,10 +765,11 @@ getData =
 
 saveData ( model, cmd ) =
     ( model
-    , Cmd.batch
-        [ cmd
-        , outgoingPort <| outgoingMsgEncoder (SaveData "destinations" <| dataEncoder model)
-        ]
+    , Debug.log "batch" <|
+        Cmd.batch
+            [ Debug.log "cmd" cmd
+            , outgoingPort <| outgoingMsgEncoder (SaveData "destinations" <| dataEncoder model)
+            ]
     )
 
 

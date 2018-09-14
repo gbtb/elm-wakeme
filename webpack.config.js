@@ -77,6 +77,7 @@ module.exports = {
   // Other webpack config...
   mode: mode,
   entry: ["./alarm.mp3", "./index.html", "./index.js"],
+  devtool: mode === 'development' ? 'source-map' : undefined,
   module: {
     rules: [
         {
