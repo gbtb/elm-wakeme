@@ -1,16 +1,14 @@
 //require('./node_modules/@fortawesome/fontawesome-free/js/all.min.js');
 var Elm = require('./Main.elm');
 
+var options, notification;
+
 /** Service worker registration */
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', function() {
 	  navigator.serviceWorker
-	  	.register('/sw.js').then(() => {
-			if (workbox) {
-				console.log(`Yay! Workbox is loaded 🎉`);
-			  } else {
-				console.log(`Boo! Workbox didn't load 😬`);
-			  }
+	  	.register('/sw.js').then(reg => {
+			console.log("SW Registered!");
 		  });
 	  
 	});
@@ -18,7 +16,6 @@ if ('serviceWorker' in navigator) {
 
 
 /** Elm initialization */
-var id, target, options, notification;
 
 var app = Elm.Elm.Main.init({
   node: document.getElementById('elm')
@@ -118,27 +115,34 @@ function showNotification(permission){
 
 
 	try {
+		throw "e";
 		notification = new Notification("Proximity alert!", {
 			requireInteraction: true
 		});
-
+		
 		notification.onclick = () => stopAlarm();
 		notification.onclose = () => stopAlarm();
 		notification.onerror = () => stopAlarm();
 	}catch(e){
 		//exception means we are on Android without support for direct Notification construction
 		//https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification
-		navigator.serviceWorker.ready.then(function(registration) {
-			registration.showNotification("Proximity alert!", {
-			  vibrate: [200, 100, 200, 100, 200, 100, 200]
+		//https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#Browser_compatibility
+		navigator.serviceWorker.getRegistration()
+		.then(registration => {
+			registration.showNotification("Proximity alert!")
+			.then(_ => {
+				registration.getNotifications()
+				.then(notifications => {
+					notifications.map(notification => {
+						notification.onclick = () => stopAlarm();
+						notification.onclose = () => stopAlarm();
+						notification.onerror = () => stopAlarm();
+					});
+				});
 			});
-		  });
+		})
 		
-		  ServiceWorkerGlobalScope.onnotificationclick = () => stopAlarm();
-		  ServiceWorkerGlobalScope.onnotificationclose = () => stopAlarm();
 	}
-	
-
 	
 }
 
@@ -151,9 +155,12 @@ function stopAlarm(){
 	else
 	{
 		//probably, we are on android, when notifications constructed through Service Workers
-		ServiceWorkerRegistration.getNotifications().then(notifications => {
-			notifications.map(notification => notification.close());
-		});
+		navigator.serviceWorker.getRegistration()
+		.then(registration => registration.getNotifications()
+			.then(notifications => {
+				notifications.map(notification => notification.close());
+			})
+		);
 	}
 	app.ports.incomingPort.send({AlarmWasStopped: null});
 }

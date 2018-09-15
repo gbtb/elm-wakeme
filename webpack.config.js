@@ -6,9 +6,8 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 
 
-const mode = 'development';//'production';
+const mode = 'development';
 
-// Enable users to turn on dead code elimination.
 const deadCodeElimination =
      {
         dead_code: true,
@@ -33,7 +32,7 @@ const deadCodeElimination =
         ]
       };
 
-const  minimizer = mode !== 'production' ? [] : [
+const minimizer = mode !== 'production' ? [] : [
         new UglifyJsPlugin({
             uglifyOptions: {
               keep_fargs: false,
@@ -73,6 +72,7 @@ const  minimizer = mode !== 'production' ? [] : [
             })
       ];
 
+// Enable users to turn on dead code elimination.
 module.exports = {
   // Other webpack config...
   mode: mode,
@@ -130,5 +130,7 @@ module.exports = {
     minimizer: minimizer
   }
 };
+
+
 
 
