@@ -439,7 +439,7 @@ scale x =
 
 
 colors =
-    { aqua = Element.rgba255 97 201 168 1.0
+    { aqua = Element.rgba255 97 201 168 1.0 --#6bfbaf
     , papaya = Element.rgba255 255 238 219 1
     , silver = Element.rgba255 173 168 182 0.9
     , purple = Element.rgba255 76 59 77 0.9

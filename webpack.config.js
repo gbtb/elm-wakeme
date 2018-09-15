@@ -3,6 +3,7 @@ const {InjectManifest, GenerateSW} = require('workbox-webpack-plugin');
 const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const CompressionPlugin = require('compression-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const WebpackPwaManifest = require('webpack-pwa-manifest')
 
 
 
@@ -126,7 +127,25 @@ module.exports = {
     new CompressionPlugin(),
     new CopyWebpackPlugin([
       "./send_message.js"
-    ])
+    ]),
+    new WebpackPwaManifest({
+      //since we use custom html, injection is not working
+      inject: false,
+      fingerprints: false,
+      name: 'Wakeme',
+      short_name: 'Wakeme',
+      description: 'Web app to wake me up upon arrival to location(GPS-based)',
+      background_color: '#ffffff',
+      orientation: "landscape",
+      theme_color: "aliceblue",
+      crossorigin: 'anonymous', //can be null, use-credentials or anonymous
+      icons: [
+        {
+          src: './Wakeme.png',
+          sizes: [96, 128, 192, 256, 384, 512] // multiple sizes
+        }
+      ]
+    })
   ],
   optimization: {
     minimizer: minimizer

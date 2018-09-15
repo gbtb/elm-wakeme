@@ -7,7 +7,8 @@ var options, notification;
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', function() {
 	  navigator.serviceWorker
-	  	.register('/sw.js').then(reg => {
+		  .register('/sw.js')
+		  .then(reg => {
 			console.log("SW Registered!");
 			// Handler for messages coming from the service worker
 			navigator.serviceWorker.addEventListener('message', function(event){
@@ -15,7 +16,10 @@ if ('serviceWorker' in navigator) {
 				stopAlarm();
 				//event.ports[0].postMessage("Client 1 Says 'Hello back!'");
 			});
-		  });
+		  })
+		  .catch(registrationError => {
+			console.log('SW registration failed: ', registrationError);
+		});
 	  
 	});
   }
@@ -104,15 +108,20 @@ function playAlarm(){
 	console.log("playAlarm");
 	const alarm = document.getElementById("alarm");
 	alarm.play();
-
+	
+	//TODO: show error in elm, if no permission granted
 	if(Notification.permission === 'default'){
 		Notification.requestPermission()
 		.then(
 			showNotification
-		)
+		);
+		return;
 	}else if (Notification.permission === 'granted'){
-		showNotification('granted')
+		showNotification('granted');
+		return;
 	}
+
+	console.log('Notification not permitted!');
 }
 
 function showNotification(permission){
