@@ -2,7 +2,7 @@ module Main exposing (Data, Model, Msg(..), defaultLocation, defaultModel, getCu
 
 import Array
 import Browser
-import Browser.Dom exposing (getElement)
+import Browser.Dom exposing (getElement, getViewport)
 import Browser.Events
 import Dict
 import Element exposing (fill, maximum)
@@ -79,6 +79,7 @@ type Msg
     | ClickOnMap Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
     | GetViewport (Result Browser.Dom.Error Browser.Dom.Viewport)
+    | GetResizeEvent Int Int
     | RadiusChange Float
     | PortMsg IncomingMsg
     | AddError Error
@@ -108,16 +109,19 @@ update msgArg model =
                 Ok elem ->
                     ( { model | topPos = elem.element.y }, Cmd.none )
 
-                Err e ->
-                    ( model | error = Just { text = e, action = Nothing} , Cmd.none )
+                Err (Browser.Dom.NotFound e) ->
+                    ( { model | error = Just { text = e, action = Nothing } }, Cmd.none )
 
         GetViewport res ->
             case res of
                 Ok viewport ->
-                    ( { model | map = model.map |> setWidth (viewport.width - 10.0) }, Cmd.none )
+                    ( { model | map = model.map |> Maps.updateMap (Maps.Map.setWidth (viewport.viewport.width - 20.0)) }, Cmd.none )
 
-                Err e ->
-                    ( model, Cmd.none )
+                Err (Browser.Dom.NotFound e) ->
+                    ( { model | error = Just { text = e, action = Nothing } }, Cmd.none )
+
+        GetResizeEvent width _ ->
+            ( { model | map = model.map |> Maps.updateMap (Maps.Map.setWidth (toFloat width - 20.0)) }, Cmd.none )
 
         MapsMsg msg ->
             let
@@ -411,9 +415,7 @@ view model =
                 [ viewHeader model
                 , Element.column
                     ([ Element.width
-                        (fill
-                            |> maximum 500
-                        )
+                        fill
                      , Element.paddingXY 10 20
                      , Element.spacing 20
                      ]
@@ -449,7 +451,7 @@ scale x =
 
 colors =
     { aqua = Element.rgba255 97 201 168 1.0 --#6bfbaf
-    , papaya = Element.rgba255 255 238 219 1
+    , papaya = Element.rgba255 255 238 219 1 -- #FFEEDB
     , silver = Element.rgba255 173 168 182 0.9
     , purple = Element.rgba255 76 59 77 0.9
     , maroon = Element.rgba255 165 56 96 0.9
@@ -655,7 +657,10 @@ onTouch =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    incomingPort processIncomingMsg
+    Sub.batch
+        [ incomingPort processIncomingMsg
+        , Browser.Events.onResize GetResizeEvent
+        ]
 
 
 init _ =
