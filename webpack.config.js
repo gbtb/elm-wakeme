@@ -110,6 +110,7 @@ module.exports = {
   plugins: [
     new GenerateSW({
         swDest: "./sw.js",
+        importScripts: ["send_message.js"],
         runtimeCaching: [{
             urlPattern: new RegExp('^http.*'),
             handler: 'cacheFirst',
@@ -124,6 +125,7 @@ module.exports = {
     }),
     new CompressionPlugin(),
     new CopyWebpackPlugin([
+      "./send_message.js"
     ])
   ],
   optimization: {

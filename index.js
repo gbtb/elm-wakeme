@@ -9,6 +9,12 @@ if ('serviceWorker' in navigator) {
 	  navigator.serviceWorker
 	  	.register('/sw.js').then(reg => {
 			console.log("SW Registered!");
+			// Handler for messages coming from the service worker
+			navigator.serviceWorker.addEventListener('message', function(event){
+				console.log("Client 1 Received Message: " + event.data);
+				stopAlarm();
+				//event.ports[0].postMessage("Client 1 Says 'Hello back!'");
+			});
 		  });
 	  
 	});
