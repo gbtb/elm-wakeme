@@ -78,6 +78,7 @@ type Msg
     | UpdateLocation
     | ClickOnMap Mouse.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
+    | GetViewport (Result Browser.Dom.Error Browser.Dom.Viewport)
     | RadiusChange Float
     | PortMsg IncomingMsg
     | AddError Error
@@ -106,6 +107,14 @@ update msgArg model =
             case res of
                 Ok elem ->
                     ( { model | topPos = elem.element.y }, Cmd.none )
+
+                Err e ->
+                    ( model | error = Just { text = e, action = Nothing} , Cmd.none )
+
+        GetViewport res ->
+            case res of
+                Ok viewport ->
+                    ( { model | map = model.map |> setWidth (viewport.width - 10.0) }, Cmd.none )
 
                 Err e ->
                     ( model, Cmd.none )
@@ -652,7 +661,8 @@ subscriptions model =
 init _ =
     ( defaultModel
     , Cmd.batch
-        [ Task.attempt UpdateMapWindowPosition <| getElement "mapWindow"
+        [ Task.attempt GetViewport getViewport
+        , Task.attempt UpdateMapWindowPosition <| getElement "mapWindow"
         , Random.generate SetInitialSeed Random.independentSeed
         , getData
         ]

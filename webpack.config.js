@@ -136,7 +136,7 @@ module.exports = {
       short_name: 'Wakeme',
       description: 'Web app to wake me up upon arrival to location(GPS-based)',
       background_color: '#ffffff',
-      orientation: "landscape",
+      orientation: "portrait",
       theme_color: "aliceblue",
       crossorigin: 'anonymous', //can be null, use-credentials or anonymous
       icons: [
