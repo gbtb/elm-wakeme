@@ -124,7 +124,7 @@ module.exports = {
          
         }]
     }),
-    new CompressionPlugin(),
+    //new CompressionPlugin(), Netlify automatically uses gzip
     new CopyWebpackPlugin([
       "./send_message.js"
     ]),

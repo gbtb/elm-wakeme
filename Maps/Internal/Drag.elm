@@ -8,9 +8,10 @@ module Maps.Internal.Drag exposing
     )
 
 import Html
-import Html.Events exposing (on, onMouseUp, preventDefaultOn)
+import Html.Events exposing (custom, on, onMouseUp, preventDefaultOn)
 import Json.Decode as Json
 import Maps.Internal.Screen as Screen
+import Maps.Internal.Utils exposing (noDefaultButPropagate)
 
 
 type Drag
@@ -52,7 +53,7 @@ offset dragValue =
 
 alwaysPreventDefault : msg -> ( msg, Bool )
 alwaysPreventDefault msg =
-    ( msg, True )
+    ( msg, False )
 
 
 events : EventOptions msg -> Maybe Drag -> List (Html.Attribute msg)
@@ -70,21 +71,36 @@ events { dragStart, dragTo, dragStop } dragValue =
                 Screen.decodeOffset
     , -- Mouse
       onMouseUp dragStop
+    , -- Mobile
+      {- custom "touchstart" <|
+             Json.map noDefaultButPropagate <|
+                 Json.map (Maybe.withDefault pinchStop) <|
+                     Json.map (Maybe.map pinchStart) <|
+                         Screen.decodeTwoFingers
+         , -- Mobile
+           custom "touchmove" <|
+             Json.map noDefaultButPropagate <|
+                 Json.map (Maybe.withDefault pinchStop) <|
+                     Json.map (Maybe.map pinchTo) <|
+                         Screen.decodeTwoFingers
+         , -- Mobile
+           custom "touchend" <|
+             Json.map noDefaultButPropagate <|
+                 Json.succeed pinchStop
+      -}
+      if dragValue == Nothing then
+        custom "touchstart" <|
+            Json.map noDefaultButPropagate <|
+                Json.map dragStart <|
+                    Screen.decodeOffset
 
-    {- , -- Mobile
-         if dragValue == Nothing then
-           preventDefaultOn "touchstart" <|
-               Json.map alwaysPreventDefault <|
-                   Json.map dragStart <|
-                       Screen.decodeOffset
-         else
-           preventDefaultOn "touchmove" <|
-               Json.map alwaysPreventDefault <|
-                   Json.map dragTo <|
-                       Screen.decodeOffset
-       , -- Mobile
-         preventDefaultOn "touchend" <|
-           Json.map alwaysPreventDefault <|
-               Json.succeed dragStop
-    -}
+      else
+        custom "touchmove" <|
+            Json.map noDefaultButPropagate <|
+                Json.map dragTo <|
+                    Screen.decodeOffset
+    , -- Mobile
+      custom "touchend" <|
+        Json.map noDefaultButPropagate <|
+            Json.succeed dragStop
     ]

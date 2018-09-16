@@ -77,6 +77,7 @@ type Msg
     | MapsMsg (Maps.Msg Data)
     | UpdateLocation
     | ClickOnMap Mouse.Event
+    | TouchOnMap Touch.Event
     | UpdateMapWindowPosition (Result Browser.Dom.Error Browser.Dom.Element)
     | GetViewport (Result Browser.Dom.Error Browser.Dom.Viewport)
     | GetResizeEvent Int Int
@@ -169,27 +170,21 @@ update msgArg model =
 
                 y =
                     Tuple.second event.clientPos - model.topPos
-
-                markerPos =
-                    Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
-
-                map =
-                    Maps.Convert.getMap model.map
-
-                metersPerPx =
-                    pixelLength map.center.lat map.zoom
-
-                marker =
-                    targetMarker (model |> getDest) metersPerPx
             in
-            ( { model
-                | map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
-              }
-                |> updateDest (Maybe.map (\dest -> { dest | desiredLocation = markerPos }))
-            , Cmd.none
-            )
-                |> updateDistance
-                |> saveData
+            updateOnMapClick model x y
+
+        TouchOnMap event ->
+            let
+                touch =
+                    event.targetTouches |> List.head
+
+                x =
+                    Maybe.map (.clientPos >> Tuple.first) touch
+
+                y =
+                    Maybe.map (.clientPos >> Tuple.second) touch |> Maybe.map (\a -> a - model.topPos)
+            in
+            Maybe.map2 (updateOnMapClick model) x y |> Maybe.withDefault ( model, Cmd.none )
 
         RadiusChange r ->
             ( model
@@ -255,6 +250,30 @@ updateInitialDestination ( model, cmd ) =
 
     else
         ( model, cmd )
+
+
+updateOnMapClick model x y =
+    let
+        markerPos =
+            Maps.Convert.screenOffsetToLatLng (Maps.Convert.getMap model.map) { x = x, y = y }
+
+        map =
+            Maps.Convert.getMap model.map
+
+        metersPerPx =
+            pixelLength map.center.lat map.zoom
+
+        marker =
+            targetMarker (model |> getDest) metersPerPx
+    in
+    ( { model
+        | map = model.map |> Maps.updateMarkers (updateMarker 1 (Maps.Marker.createCustom marker markerPos))
+      }
+        |> updateDest (Maybe.map (\dest -> { dest | desiredLocation = markerPos }))
+    , Cmd.none
+    )
+        |> updateDistance
+        |> saveData
 
 
 createDestination model =
@@ -436,7 +455,7 @@ view model =
                     , Element.el
                         [ Element.htmlAttribute <| onClick ClickOnMap
                         , Element.htmlAttribute (id "mapWindow")
-                        , Element.htmlAttribute <| onTouch ClickOnMap
+                        , Element.htmlAttribute <| onTouch TouchOnMap
                         ]
                       <|
                         Element.html <|
@@ -659,7 +678,7 @@ onClick =
 
 onTouch =
     { stopPropagation = False, preventDefault = True }
-        |> Mouse.onWithOptions "touchend"
+        |> Touch.onWithOptions "touchstart"
 
 
 subscriptions : Model -> Sub Msg
