@@ -147,14 +147,9 @@ function showNotification(permission){
 		.then(registration => {
 			registration.showNotification("Proximity alert!")
 			.then(_ => {
-				registration.getNotifications()
-				.then(notifications => {
-					notifications.map(notification => {
-						notification.onclick = () => stopAlarm();
-						notification.onclose = () => stopAlarm();
-						notification.onerror = () => stopAlarm();
-					});
-				});
+			})
+			.catch(e => {
+				console.log("cant show sw notif: " + e);
 			});
 		})
 		
