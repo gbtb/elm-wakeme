@@ -122,6 +122,7 @@ function playAlarm(){
 	}
 
 	console.log('Notification not permitted!');
+	app.ports.incomingPort.send({NotificationPermissionError: null});
 }
 
 function showNotification(permission){

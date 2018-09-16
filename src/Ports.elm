@@ -32,5 +32,6 @@ type OutgoingMsg
 type IncomingMsg
     = LocationUpdate Location
     | LocationUpdateError String
+    | NotificationPermissionError
     | AlarmWasStopped
     | ReceiveData String Value

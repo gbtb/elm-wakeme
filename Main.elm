@@ -315,6 +315,13 @@ updateOnPortMsg msg model =
         LocationUpdateError e ->
             ( { model | error = Just { text = e, action = Just UpdateLocation } }, Cmd.none )
 
+        NotificationPermissionError ->
+            let
+                txt =
+                    "Please, give a permission for notifications!"
+            in
+            ( { model | error = Just { text = txt, action = Just UpdateLocation } }, Cmd.none )
+
 
 setCurrentDestination ( model, cmd ) =
     let
